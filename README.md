@@ -1,4 +1,4 @@
-# Multi-Agent Operator Engineering
+# Worktree-Based Operator Engineering Protocol
 
 A reusable skill for coordinating Codex, Claude Code, Pi, Herdr, and other coding agents through a consistent multi-agent development and operator engineering protocol.
 
@@ -30,7 +30,7 @@ npx skills add https://gitcode.com/Hirozy/multi-agent-operator-engineering.git
 Invoke the skill in an Agent Skills-compatible tool:
 
 ```text
-$multi-agent-operator-engineering
+$worktree-based-operator-engineering
 ```
 
 Then describe the parallel development, operator implementation, optimization, porting, validation, or audit task. The skill guides the agent through worktree isolation, run and artifact recording, Campaign management, and safe cleanup.

@@ -1,9 +1,9 @@
 ---
-name: multi-agent-operator-engineering
+name: worktree-based-operator-engineering
 description: Coordinate Codex, Claude, Pi, Herdr, and other coding agents with isolated Git worktrees and durable external artifacts. Use for parallel agent work or multi-round operator engineering, including new operator development, optimization, hardware or backend porting, refactoring, validation, and benchmarking, with auditable specifications, hypotheses, variants, runs, evidence, decisions, and cleanup.
 ---
 
-# Multi-Agent Worktree and Operator Engineering Protocol
+# Worktree-Based Operator Engineering Protocol
 
 Use this protocol to isolate concurrent code changes, preserve execution evidence after worktrees are deleted, and organize iterative operator engineering as a reproducible decision history.
 
