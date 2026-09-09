@@ -6,7 +6,7 @@ A reusable skill for coordinating Codex, Claude Code, Pi, Herdr, and other codin
 
 - Assigns an isolated Git worktree to every agent that modifies code, preventing concurrent workspace conflicts.
 - Requires agents to start from the root of their assigned worktree.
-- Stores `manifest.json`, `report.md`, tests, logs, benchmarks, profiles, and patches in a shared `.agent/` area outside disposable worktrees.
+- Stores `manifest.json`, `report.md`, tests, logs, benchmarks, profiles, and patches in a shared `agent-artifacts/` area outside disposable worktrees.
 - Models Worktrees and Runs independently so execution history remains traceable after temporary workspaces are removed.
 - Uses `Project > Campaign > Round > Variant > Run > Artifact` to organize new operator development, optimization, porting, refactoring, and validation.
 - Standardizes specifications, correctness oracles, acceptance criteria, hypotheses, proposals, plans, implementations, results, audits, decisions, and final reports.

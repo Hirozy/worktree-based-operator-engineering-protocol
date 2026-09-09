@@ -17,7 +17,7 @@ Treat the following as non-negotiable unless the user explicitly overrides them:
 
 1. Give every concurrent code-writing agent its own Git worktree.
 2. Start a code-writing agent at the root of its assigned worktree.
-3. Keep persistent reports and raw execution artifacts outside disposable worktrees, under the project-level `.agent/` directory.
+3. Keep persistent reports and raw execution artifacts outside disposable worktrees, under the project-level `agent-artifacts/` directory.
 4. Model a worktree and a run separately: a worktree is an execution location; a run is one recorded execution.
 5. Give every run a unique immutable directory. Never overwrite an earlier run with a retry.
 6. Bind each completed run to exact Git commits through `manifest.json`.
@@ -81,7 +81,7 @@ Prefer a project container whose Git worktrees and durable artifacts are sibling
 │   ├── codex-parser-refactor/
 │   ├── claude-api-review/
 │   └── matmul-r003-v002/
-└── .agent/                       # durable, shared, outside worktrees
+└── agent-artifacts/              # durable, shared, outside worktrees
     ├── runs/                     # non-campaign runs
     ├── campaigns/                # operator engineering campaigns
     ├── summary/                  # project-level aggregation
@@ -90,7 +90,7 @@ Prefer a project container whose Git worktrees and durable artifacts are sibling
 
 If the existing repository layout differs, preserve it and identify equivalent absolute paths. Never assume that the directory above the repository is writable or safe to modify; inspect first.
 
-Do not put the shared `.agent/` store inside a disposable worktree. Do not commit raw execution artifacts unless the user explicitly requests it.
+Do not put the shared `agent-artifacts/` store inside a disposable worktree. Do not commit raw execution artifacts unless the user explicitly requests it.
 
 ## Agent Startup Directory
 
@@ -104,7 +104,7 @@ Start agents according to role:
 | Reviewer or auditor | Detached read-only worktree, or dedicated review worktree |
 | Integrator | Dedicated integration worktree |
 | Planner or researcher | Primary repository only when guaranteed read-only |
-| Artifact aggregator | Project-level `.agent/` context; no code worktree required |
+| Artifact aggregator | Project-level `agent-artifacts/` context; no code worktree required |
 
 At startup, verify all of the following before modifying code:
 
@@ -203,7 +203,7 @@ A run usually outlives its worktree.
 Create the run directory before launching the agent. Expose it inside the worktree through a stable path:
 
 ```text
-<worktree>/.agent-artifacts -> <project-container>/.agent/.../<run-id>
+<worktree>/.agent-artifacts -> <project-container>/agent-artifacts/.../<run-id>
 ```
 
 Use a symlink when supported. If symlinks are unavailable, provide an absolute artifact path through the agent's task instructions or an environment variable such as `AGENT_ARTIFACT_DIR`.
@@ -213,13 +213,13 @@ The path `.agent-artifacts/` is an interface, not the storage location. Verify t
 For a general task, use:
 
 ```text
-.agent/runs/<run-id>/
+agent-artifacts/runs/<run-id>/
 ```
 
 For an operator campaign variant, use:
 
 ```text
-.agent/campaigns/<campaign>/rounds/R<round>/V<variant>-<slug>/runs/<run-id>/
+agent-artifacts/campaigns/<campaign>/rounds/R<round>/V<variant>-<slug>/runs/<run-id>/
 ```
 
 Do not duplicate a run in both locations. Store it at its canonical path and put only an index entry or relative reference in a project registry when global discovery is needed.
@@ -376,7 +376,7 @@ Do not paste huge logs into the report. Summarize them and reference raw artifac
 Use one durable directory per campaign:
 
 ```text
-.agent/campaigns/<campaign>/
+agent-artifacts/campaigns/<campaign>/
 ├── README.md
 ├── manifest.json
 ├── reference/
@@ -1148,7 +1148,7 @@ Tool-specific launch commands may differ, but the protocol and ownership rules d
 
 When joining an existing project or campaign:
 
-1. Locate the project container, repository, worktrees, and durable `.agent/` root.
+1. Locate the project container, repository, worktrees, and durable `agent-artifacts/` root.
 2. Read repository instructions and inspect active worktrees.
 3. For campaigns, read `README.md`, `manifest.json`, the reference package, applicable baseline documents, `summary/status.md`, `summary/decisions.md`, and the current round.
 4. Inspect the target variant and all prior documents in its record chain.
@@ -1185,7 +1185,7 @@ Remember these six invariants:
 one concurrent code-writing agent -> one worktree
 one execution                     -> one run
 worktree                          -> disposable code environment
-.agent                            -> durable evidence and knowledge
+agent-artifacts                   -> durable evidence and knowledge
 manifest.json                     -> run-to-Git provenance
 single aggregator                 -> conflict-free shared summaries
 ```
