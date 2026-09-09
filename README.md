@@ -16,13 +16,13 @@ A reusable skill for coordinating Codex, Claude Code, Pi, Herdr, and other codin
 Install from GitHub:
 
 ```bash
-npx skills add https://github.com/Hirozy/multi-agent-operator-engineering
+npx skills add https://github.com/Hirozy/worktree-based-operator-engineering-protocol
 ```
 
 Install from GitCode:
 
 ```bash
-npx skills add https://gitcode.com/Hirozy/multi-agent-operator-engineering.git
+npx skills add https://gitcode.com/Hirozy/worktree-based-operator-engineering-protocol.git
 ```
 
 ## Usage
@@ -30,7 +30,7 @@ npx skills add https://gitcode.com/Hirozy/multi-agent-operator-engineering.git
 Invoke the skill in an Agent Skills-compatible tool:
 
 ```text
-$worktree-based-operator-engineering
+$worktree-based-operator-engineering-protocol
 ```
 
 Then describe the parallel development, operator implementation, optimization, porting, validation, or audit task. The skill guides the agent through worktree isolation, run and artifact recording, Campaign management, and safe cleanup.
