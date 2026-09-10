@@ -27,7 +27,7 @@ Treat the following as non-negotiable unless the user explicitly overrides them:
 10. Never delete a worktree until code state and required evidence are recoverable.
 11. Assign exactly one active Coordinator to each project or campaign coordination scope.
 12. Give every dispatched Worker an immutable `assignment.json` that identifies exact paths, commits, permissions, inputs, and required outputs.
-13. Require explicit user consent before changing global Git configuration; otherwise ignore `.agent-artifacts` through repository-local Git metadata.
+13. Keep `.agent-artifacts` out of Git by maintaining the repository-local excludes file; do not modify global Git configuration for this purpose.
 
 ## Conceptual Model
 
@@ -147,7 +147,7 @@ The Coordinator owns workflow control, not implementation. It must:
 - Allocate collision-free task, campaign, round, variant, worktree, branch, and run identities.
 - Resolve and record exact base commits before creating worktrees.
 - Create Worker run directories, immutable assignment envelopes, initial manifests, and `.agent-artifacts` context links.
-- Ask for explicit user consent before maintaining a host-level Git exclude rule; use repository-local Git metadata when consent is not granted.
+- Maintain the repository-local Git exclude rule for `.agent-artifacts` without modifying global Git configuration or committed ignore files.
 - Dispatch Workers with explicit roles and stable assignment paths.
 - Monitor state through manifests and reports rather than inferring progress from processes or directory names.
 - Validate terminal outputs before starting audit, integration, aggregation, retry, or cleanup.
@@ -281,23 +281,7 @@ Before creating `.agent-artifacts`, the Coordinator must ensure Git ignores this
 
 Do not add a trailing slash: the worktree entrypoint is normally a symlink, and a directory-only pattern may not ignore it.
 
-Changing Git's global configuration or global excludes file always requires explicit user consent. Invoking this Skill or asking the Coordinator to create a worktree does not imply that consent. Before running any command with `git config --global` or modifying a global excludes file, explain the exact change and ask the user to approve it.
-
-Only after the user approves, preserve the existing global excludes file, resolve its configured location, and append the pattern only when absent:
-
-```bash
-exclude_file="$(git config --global --path --get core.excludesFile || true)"
-if [ -z "$exclude_file" ]; then
-  exclude_file="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
-  git config --global core.excludesFile "$exclude_file"
-fi
-mkdir -p "$(dirname "$exclude_file")"
-touch "$exclude_file"
-grep -qxF '/.agent-artifacts' "$exclude_file" ||
-  printf '%s\n' '/.agent-artifacts' >> "$exclude_file"
-```
-
-If the user does not approve a global change, do not run the block above. Use the repository-local excludes file instead, preserving existing contents and appending the same pattern only when absent:
+The Coordinator performs this directly through the repository-local excludes file. Preserve its existing contents and append the pattern only when absent:
 
 ```bash
 exclude_file="$(git rev-parse --path-format=absolute --git-path info/exclude)"
@@ -307,13 +291,15 @@ grep -qxF '/.agent-artifacts' "$exclude_file" ||
   printf '%s\n' '/.agent-artifacts' >> "$exclude_file"
 ```
 
+This is local operational Git metadata: it is not committed and does not affect unrelated repositories. Do not use `git config --global`, modify a global excludes file, or add this entrypoint to the repository's committed `.gitignore` for this purpose.
+
 After creating the symlink, verify it from the worktree root:
 
 ```bash
 git check-ignore -v .agent-artifacts
 ```
 
-If `.agent-artifacts` is already tracked, stop and report it. Do not remove it from the index or rewrite repository history without explicit authorization. Do not add this operational entrypoint to the repository's committed `.gitignore` unless the project intentionally adopts the convention.
+If `.agent-artifacts` is already tracked, stop and report it. Do not remove it from the index or rewrite repository history without explicit authorization.
 
 For a general task, use:
 
@@ -1268,7 +1254,7 @@ The Coordinator follows this sequence for a code-changing task:
 3. Define task, role, owner, base ref, branch, worktree, and run ID.
 4. Create the branch and worktree from an explicit commit.
 5. Create the durable run directory, immutable `assignment.json`, and pending `manifest.json`.
-6. Obtain consent before any global Git exclude change, otherwise use repository-local excludes; then link `.agent-artifacts/` and verify both the ignore rule and assigned run path.
+6. Add the repository-local exclude rule, link `.agent-artifacts/`, and verify both the ignore rule and assigned run path.
 7. Start the Worker from the assigned worktree root with the assignment path.
 8. Require the Worker preflight handshake before source modification.
 9. Let the Worker implement only within the assigned scope and record deviations.
@@ -1436,7 +1422,7 @@ Do not report completion until all applicable checks pass:
 - [ ] Every dispatched run retained its immutable `assignment.json`.
 - [ ] Worker preflight verified paths, commits, artifact resolution, inputs, and permissions.
 - [ ] Parallel writers used separate worktrees and branches.
-- [ ] Any global Git exclude change had explicit user consent; otherwise repository-local Git metadata ignores `.agent-artifacts`.
+- [ ] Repository-local Git metadata ignores `.agent-artifacts`; no global Git configuration was changed.
 - [ ] Durable artifacts are outside disposable worktrees.
 - [ ] Run and worktree identities are separately recorded.
 - [ ] `manifest.json` is valid, final, and points to exact commits.
