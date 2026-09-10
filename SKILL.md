@@ -127,7 +127,8 @@ At startup, verify all of the following before modifying code:
 current directory == assigned worktree root
 current branch or detached commit == assignment
 repository root == expected repository
-artifact link == assigned run directory
+artifact link == assigned campaign directory, or project artifact root for non-campaign work
+run directory == assignment artifacts.run_directory
 no other active agent owns this worktree
 ```
 
@@ -144,7 +145,7 @@ The Coordinator owns workflow control, not implementation. It must:
 - Inspect repository instructions, active worktrees, dirty state, campaign state, and current summaries before dispatch.
 - Allocate collision-free task, campaign, round, variant, worktree, branch, and run identities.
 - Resolve and record exact base commits before creating worktrees.
-- Create Worker run directories, immutable assignment envelopes, initial manifests, and `.agent-artifacts` links.
+- Create Worker run directories, immutable assignment envelopes, initial manifests, and `agent-artifacts` context links.
 - Dispatch Workers with explicit roles and stable assignment paths.
 - Monitor state through manifests and reports rather than inferring progress from processes or directory names.
 - Validate terminal outputs before starting audit, integration, aggregation, retry, or cleanup.
@@ -252,15 +253,21 @@ A run usually outlives its worktree.
 
 ## Durable Artifact Access
 
-Create the run directory before launching the agent. Expose it inside the worktree through a stable path:
+Create the campaign and run directories before launching the agent. Expose the campaign root inside every campaign worktree through a stable path:
 
 ```text
-<worktree>/.agent-artifacts -> <project-container>/agent-artifacts/.../<run-id>
+<worktree>/agent-artifacts -> <project-container>/agent-artifacts/campaigns/<campaign>
 ```
 
-Use a symlink when supported. If symlinks are unavailable, provide an absolute artifact path through the agent's task instructions or an environment variable such as `AGENT_ARTIFACT_DIR`.
+For work outside a campaign, map the same entrypoint to the project artifact root:
 
-The path `.agent-artifacts/` is an interface, not the storage location. Verify that it resolves outside the worktree before writing. Never replace a real user directory with a symlink.
+```text
+<worktree>/agent-artifacts -> <project-container>/agent-artifacts
+```
+
+Use a symlink when supported. If symlinks are unavailable, provide the absolute campaign or project artifact root through the agent's task instructions or an environment variable such as `AGENT_ARTIFACT_ROOT`.
+
+The path `agent-artifacts/` is a shared context interface, not the Worker's private run directory. Verify that it resolves outside the worktree. A Worker may read applicable campaign context but may write only within the `run_directory` declared by its assignment, except when its role explicitly grants ownership of another campaign document. Never replace a real user directory with a symlink.
 
 For a general task, use:
 
@@ -286,7 +293,7 @@ Minimum assignment schema:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "assignment_id": "R001-V001-implementation-01",
   "created_at": "2026-09-10T10:00:00+08:00",
   "coordinator": {
@@ -313,7 +320,8 @@ Minimum assignment schema:
   },
   "artifacts": {
     "run_id": "20260910-100000-codex-implementation-01",
-    "entrypoint": ".agent-artifacts",
+    "entrypoint": "agent-artifacts",
+    "run_path": "rounds/R001/V001-reference/runs/20260910-100000-codex-implementation-01",
     "run_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16/rounds/R001/V001-reference/runs/20260910-100000-codex-implementation-01"
   },
   "inputs": [
@@ -349,6 +357,8 @@ Assignment rules:
 
 - Use absolute paths for host-local project, repository, worktree, and run locations.
 - Record the issuing Coordinator and its run ID.
+- Treat `artifacts.entrypoint` as the campaign context root, not as the run directory.
+- Record `artifacts.run_path` relative to the entrypoint and ensure it resolves to `artifacts.run_directory`.
 - Use paths relative to the campaign directory for campaign inputs.
 - Record exact full commits; do not assign a moving branch tip as review or test evidence.
 - List every required output and verification gate explicitly.
@@ -358,9 +368,9 @@ Assignment rules:
 
 The Coordinator passes the assignment through three compatible channels:
 
-1. Create `<worktree>/.agent-artifacts` pointing to the canonical run directory.
-2. Put the stable assignment path in the launch prompt: `Read .agent-artifacts/assignment.json before modifying code.`
-3. Optionally export `AGENT_ASSIGNMENT=.agent-artifacts/assignment.json` and `AGENT_ARTIFACT_DIR=.agent-artifacts` for CLI-based Workers.
+1. Create `<worktree>/agent-artifacts` pointing to the campaign directory, or to the project artifact root for non-campaign work.
+2. Put the exact assignment path in the launch prompt: `Read agent-artifacts/<run-path>/assignment.json before modifying code.`
+3. Optionally export `AGENT_ASSIGNMENT=agent-artifacts/<run-path>/assignment.json`, `AGENT_ARTIFACT_ROOT=agent-artifacts`, and `AGENT_RUN_DIR=agent-artifacts/<run-path>` for CLI-based Workers.
 
 Do not rely on environment inheritance alone because remote, desktop, and delegated Agent runtimes may not preserve it. Do not paste large artifacts into the prompt; pass exact file paths and commits.
 
@@ -386,7 +396,8 @@ Before editing, the Worker must verify:
 - Current directory equals the assigned worktree root.
 - Current branch or detached commit matches the assignment.
 - The repository root and base or target commit match.
-- `.agent-artifacts` resolves to the assigned external run directory.
+- `agent-artifacts` resolves to the assigned campaign directory, or project artifact root for non-campaign work.
+- The assigned `run_path` resolves to the declared external `run_directory`.
 - Required input files exist and are readable.
 - Requested actions fit the granted permissions.
 
@@ -1211,7 +1222,7 @@ The Coordinator follows this sequence for a code-changing task:
 3. Define task, role, owner, base ref, branch, worktree, and run ID.
 4. Create the branch and worktree from an explicit commit.
 5. Create the durable run directory, immutable `assignment.json`, and pending `manifest.json`.
-6. Link `.agent-artifacts/` to the run directory and verify resolution.
+6. Link `agent-artifacts/` to the campaign directory, or project artifact root for non-campaign work, and verify the assigned run path.
 7. Start the Worker from the assigned worktree root with the assignment path.
 8. Require the Worker preflight handshake before source modification.
 9. Let the Worker implement only within the assigned scope and record deviations.
@@ -1284,14 +1295,15 @@ Include or adapt this block when dispatching Codex, Claude, Pi, Herdr, or anothe
 
 You own exactly one assigned Git worktree and one run directory.
 
-- Read `.agent-artifacts/assignment.json` before taking any task action.
+- Read the exact `agent-artifacts/<run-path>/assignment.json` supplied in the launch prompt before taking any task action.
 - Treat the assignment as immutable and authoritative.
 - Complete the preflight handshake before modifying source.
 - Start and remain at the assigned worktree root for code operations.
 - Confirm the expected branch or detached commit before editing.
 - Do not modify another agent's worktree, branch, run directory, or summary files.
-- Write durable execution evidence through `.agent-artifacts/`.
-- Required run files are `.agent-artifacts/manifest.json` and `.agent-artifacts/report.md`.
+- Use `agent-artifacts/` to read applicable campaign context.
+- Write durable execution evidence only through the assigned `agent-artifacts/<run-path>/` directory.
+- Required run files are `agent-artifacts/<run-path>/manifest.json` and `agent-artifacts/<run-path>/report.md`.
 - Store raw evidence under `logs/`, `tests/`, `benchmarks/`, `profiling/`, `patches/`, `attachments/`, or `environment/`.
 - Do not commit raw execution artifacts unless explicitly requested.
 - Record the base commit before work and the result commit after committing intended changes.
