@@ -1,6 +1,6 @@
 ---
 name: worktree-based-operator-engineering-protocol
-description: Coordinate Codex, Claude, Pi, Herdr, and other coding agents with isolated Git worktrees and durable external artifacts. Use for parallel agent work or multi-round operator engineering, including new operator development, optimization, hardware or backend porting, refactoring, validation, and benchmarking, with auditable specifications, hypotheses, variants, runs, evidence, decisions, and cleanup.
+description: Coordinate Codex, Claude, Pi, Herdr, and other coding agents with a formal Coordinator role, immutable assignment envelopes, isolated Git worktrees, and durable external artifacts. Use for parallel agent work or multi-round operator engineering, including new operator development, optimization, hardware or backend porting, refactoring, validation, and benchmarking, with auditable specifications, hypotheses, variants, runs, evidence, decisions, and cleanup.
 ---
 
 # Worktree-Based Operator Engineering Protocol
@@ -25,6 +25,8 @@ Treat the following as non-negotiable unless the user explicitly overrides them:
 8. Preserve failed and rejected work with its evidence and decision rationale.
 9. Treat worktrees as disposable and artifacts as durable.
 10. Never delete a worktree until code state and required evidence are recoverable.
+11. Assign exactly one active Coordinator to each project or campaign coordination scope.
+12. Give every dispatched Worker an immutable `assignment.json` that identifies exact paths, commits, permissions, inputs, and required outputs.
 
 ## Conceptual Model
 
@@ -70,6 +72,18 @@ Each level answers a different question:
 
 Do not substitute run numbers for rounds or variants. A variant may require several runs, and a round may compare several variants.
 
+The execution control flow is:
+
+```text
+Coordinator
+    -> Assignment Envelope
+    -> Worktree + Run
+    -> Worker
+    -> Completion Evidence
+    -> Coordinator Validation
+    -> Next Role or State Transition
+```
+
 ## Project Layout
 
 Prefer a project container whose Git worktrees and durable artifacts are siblings:
@@ -85,7 +99,7 @@ Prefer a project container whose Git worktrees and durable artifacts are sibling
     ├── runs/                     # non-campaign runs
     ├── campaigns/                # operator engineering campaigns
     ├── summary/                  # project-level aggregation
-    └── registry/                 # optional machine-readable indexes
+    └── registry/                 # Coordinator-owned indexes and leases
 ```
 
 If the existing repository layout differs, preserve it and identify equivalent absolute paths. Never assume that the directory above the repository is writable or safe to modify; inspect first.
@@ -98,6 +112,7 @@ Start agents according to role:
 
 | Role | Startup location |
 |---|---|
+| Coordinator or orchestrator | Project container root; no code worktree |
 | Coder, bug fixer, refactorer | Assigned branch worktree root |
 | Operator implementation agent | Assigned variant worktree root |
 | Tester | Detached worktree at the exact target commit |
@@ -119,6 +134,43 @@ no other active agent owns this worktree
 Read all applicable `AGENTS.md`, `CLAUDE.md`, repository instructions, and user constraints before editing.
 
 Never launch a code-writing agent from the project container directory because it is not a worktree. Avoid launching it from the primary worktree when parallel agents are active.
+
+## Coordinator Role
+
+Use a Coordinator whenever work spans multiple agents, worktrees, runs, variants, or lifecycle stages. A human or deterministic program may fulfill this role, but when an Agent fulfills it, start that Agent at the project container root.
+
+The Coordinator owns workflow control, not implementation. It must:
+
+- Inspect repository instructions, active worktrees, dirty state, campaign state, and current summaries before dispatch.
+- Allocate collision-free task, campaign, round, variant, worktree, branch, and run identities.
+- Resolve and record exact base commits before creating worktrees.
+- Create Worker run directories, immutable assignment envelopes, initial manifests, and `.agent-artifacts` links.
+- Dispatch Workers with explicit roles and stable assignment paths.
+- Monitor state through manifests and reports rather than inferring progress from processes or directory names.
+- Validate terminal outputs before starting audit, integration, aggregation, retry, or cleanup.
+- Preserve provenance when a run fails, is cancelled, or is superseded.
+
+The Coordinator must not:
+
+- Modify business source code in the project container or primary worktree.
+- Reuse one writable worktree for concurrent Workers.
+- Rewrite a Worker's assignment after dispatch.
+- Audit its own implementation result or silently approve incomplete evidence.
+- Merge, delete branches, remove worktrees, or update shared summaries unless that authority is explicitly part of the assignment.
+- Place secrets or credentials in prompts, assignments, manifests, or artifacts.
+
+Allow only one active Coordinator writer for a project or campaign scope. Record ownership in `agent-artifacts/registry/coordinator.json` or an equivalent atomic lease. A second Coordinator may operate only on a disjoint scope or after an explicit ownership transfer.
+
+The Coordinator should have its own run under `agent-artifacts/runs/` with `agent.role` set to `coordinator`. Its report records dispatches, validations, state transitions, unresolved blockers, and the final handoff. Coordinator runs do not require a code worktree.
+
+Coordinator lifecycle:
+
+```text
+initialized -> planning -> dispatching -> monitoring -> validating
+                                      ├-> replanning -> dispatching
+                                      ├-> blocked
+                                      └-> closing -> completed -> archived
+```
 
 ## Git Worktree Protocol
 
@@ -224,14 +276,146 @@ agent-artifacts/campaigns/<campaign>/rounds/R<round>/V<variant>-<slug>/runs/<run
 
 Do not duplicate a run in both locations. Store it at its canonical path and put only an index entry or relative reference in a project registry when global discovery is needed.
 
+## Assignment Envelope Protocol
+
+The Coordinator must create `assignment.json` inside the target run directory before launching a Worker. The assignment is the authoritative input contract. Prompts and environment variables carry only enough information to locate and activate that contract.
+
+Use the retained `templates/assignment.json` and validate populated assignments against `schemas/assignment.schema.json` when those files are available.
+
+Minimum assignment schema:
+
+```json
+{
+  "schema_version": "1.0",
+  "assignment_id": "R001-V001-implementation-01",
+  "created_at": "2026-09-10T10:00:00+08:00",
+  "coordinator": {
+    "name": "herdr",
+    "run_id": "20260910-095500-herdr-coordinator-01"
+  },
+  "role": "implementation",
+  "objective": "Implement the reference FP16 RMSNorm operator.",
+  "project": {
+    "container": "/projects/rmsnorm",
+    "repository": "/projects/rmsnorm/repo",
+    "worktree": "/projects/rmsnorm/worktrees/rmsnorm-r001-v001"
+  },
+  "git": {
+    "branch": "dev/rmsnorm-fp16/r001-v001-reference",
+    "base_commit": "<full-sha>",
+    "target_commit": null
+  },
+  "scope": {
+    "campaign_id": "rmsnorm-fp16",
+    "campaign_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16",
+    "round_id": "R001",
+    "variant_id": "R001-V001"
+  },
+  "artifacts": {
+    "run_id": "20260910-100000-codex-implementation-01",
+    "entrypoint": ".agent-artifacts",
+    "run_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16/rounds/R001/V001-reference/runs/20260910-100000-codex-implementation-01"
+  },
+  "inputs": [
+    "reference/specification.md",
+    "reference/api-contract.md",
+    "reference/oracle.md",
+    "reference/acceptance.md",
+    "rounds/R001/analysis.md",
+    "rounds/R001/V001-reference/plan.md"
+  ],
+  "required_outputs": [
+    "manifest.json",
+    "report.md",
+    "tests/correctness.json",
+    "patches/final.diff"
+  ],
+  "verification": [
+    "Run correctness tests",
+    "Record unsupported shapes",
+    "Record the exact result commit"
+  ],
+  "permissions": {
+    "modify_source": true,
+    "merge": false,
+    "remove_worktree": false,
+    "update_summary": false
+  },
+  "supersedes": null
+}
+```
+
+Assignment rules:
+
+- Use absolute paths for host-local project, repository, worktree, and run locations.
+- Record the issuing Coordinator and its run ID.
+- Use paths relative to the campaign directory for campaign inputs.
+- Record exact full commits; do not assign a moving branch tip as review or test evidence.
+- List every required output and verification gate explicitly.
+- Grant only the permissions required by the assigned role.
+- Never include secrets, access tokens, private keys, or unredacted environment values.
+- Make `assignment.json` read-only to the Worker after dispatch. Corrections require cancellation and a new assignment or an explicitly versioned replacement.
+
+The Coordinator passes the assignment through three compatible channels:
+
+1. Create `<worktree>/.agent-artifacts` pointing to the canonical run directory.
+2. Put the stable assignment path in the launch prompt: `Read .agent-artifacts/assignment.json before modifying code.`
+3. Optionally export `AGENT_ASSIGNMENT=.agent-artifacts/assignment.json` and `AGENT_ARTIFACT_DIR=.agent-artifacts` for CLI-based Workers.
+
+Do not rely on environment inheritance alone because remote, desktop, and delegated Agent runtimes may not preserve it. Do not paste large artifacts into the prompt; pass exact file paths and commits.
+
+### Ownership Transfer
+
+Use this single-writer sequence:
+
+```text
+Coordinator writes assignment.json and pending manifest.json
+    -> Coordinator dispatches Worker
+    -> Worker verifies assignment and owns manifest.json
+    -> Coordinator reads only while Worker is active
+    -> Worker writes terminal manifest.json and report.md
+    -> Coordinator writes validation.json after Worker stops
+```
+
+The Coordinator owns `assignment.json` and `validation.json`. The active Worker owns its `manifest.json`, `report.md`, and run artifact directories. Neither may silently rewrite the other's owned files.
+
+### Worker Preflight Handshake
+
+Before editing, the Worker must verify:
+
+- Current directory equals the assigned worktree root.
+- Current branch or detached commit matches the assignment.
+- The repository root and base or target commit match.
+- `.agent-artifacts` resolves to the assigned external run directory.
+- Required input files exist and are readable.
+- Requested actions fit the granted permissions.
+
+The Worker then updates `manifest.json` from `pending` to `running` and records a `preflight` result. On mismatch, it must set the run to `failed` or `cancelled`, describe the mismatch, and avoid source changes.
+
+### Completion Handshake
+
+Before returning control, the Worker must:
+
+- Set `manifest.status` to `completed`, `failed`, `cancelled`, or `superseded`.
+- Record the exact result commit when source changes were intended.
+- Complete `report.md` with verification, deviations, risks, unfinished work, and handoff.
+- Produce every required output or explicitly record why it is absent.
+- Leave shared summaries, merge state, branches, and worktree cleanup to authorized roles.
+
+The Coordinator validates the terminal run and writes `validation.json` using `templates/validation.json` when available. Validation must cover assignment identity, role permissions, worktree and commit provenance, required outputs, verification evidence, manifest/report consistency, and cleanup readiness.
+
+If validation fails, preserve the original run unchanged. Create a new run and assignment with `supersedes` pointing to the failed or incomplete run. Do not reopen or overwrite archived execution history.
+
 ## Standard Run Directory
 
 Every run directory must contain:
 
 ```text
 <run-id>/
+├── assignment.json              # required for dispatched runs; immutable input
 ├── manifest.json                # required machine-readable identity and status
 ├── report.md                    # required human-readable outcome
+├── validation.json              # Coordinator completion gate
 ├── logs/                        # command, build, profiler, and runtime logs
 ├── tests/                       # test output and correctness evidence
 ├── benchmarks/                  # raw benchmark data and summaries
@@ -269,12 +453,17 @@ Minimum schema:
 {
   "schema_version": "1.0",
   "run_id": "20260909-143012-codex-parser-refactor-01",
+  "assignment_file": "assignment.json",
   "task_id": "parser-refactor",
   "agent": {
     "name": "codex",
     "role": "implementation"
   },
   "status": "completed",
+  "preflight": {
+    "status": "passed",
+    "checked_at": "2026-09-09T14:31:05+08:00"
+  },
   "timestamps": {
     "created_at": "2026-09-09T14:30:12+08:00",
     "started_at": "2026-09-09T14:31:01+08:00",
@@ -297,6 +486,7 @@ Minimum schema:
     "benchmarks": "not_run"
   },
   "artifacts": [
+    "assignment.json",
     "report.md",
     "tests/pytest.txt",
     "patches/final.diff"
@@ -311,6 +501,8 @@ Minimum schema:
 Manifest requirements:
 
 - Use paths relative to the run directory in `artifacts`.
+- Ensure `assignment_file` identifies the immutable assignment used for this execution.
+- Record a successful preflight before source modification.
 - Prefer full commit SHAs for machine-readable fields.
 - Set `result_commit` only after intended source changes are committed.
 - Use `not_run`, not an implied pass, when verification was skipped.
@@ -1012,25 +1204,26 @@ Do not skip directly to a success state without the required evidence. `accepted
 
 ## End-to-End Lifecycle
 
-Follow this sequence for a code-changing task:
+The Coordinator follows this sequence for a code-changing task:
 
 1. Inspect the repository, instructions, active worktrees, and dirty state.
-2. Define task, role, owner, base ref, branch, worktree, and run ID.
-3. Create the branch and worktree from an explicit commit.
-4. Create the durable run directory and initial `manifest.json`.
-5. Link `.agent-artifacts/` to the run directory and verify resolution.
-6. Start the agent from the assigned worktree root.
-7. Implement only within the assigned scope and record important deviations.
-8. Run relevant correctness tests, benchmarks, and profiling.
-9. Save raw evidence, final patch, and environment details.
-10. Commit intended code changes and record the exact result commit.
-11. Complete `report.md` and finalize the run manifest.
-12. Review or audit the exact result commit from a separate worktree when required.
-13. Make and record the accept, reject, supersede, or cancel decision.
-14. Merge through the designated integration path when accepted.
-15. Let the aggregator update shared summaries.
-16. Verify recoverability, then clean up the disposable worktree and eligible branch.
-17. Archive the run without rewriting its evidence.
+2. Acquire Coordinator ownership for the project or campaign scope.
+3. Define task, role, owner, base ref, branch, worktree, and run ID.
+4. Create the branch and worktree from an explicit commit.
+5. Create the durable run directory, immutable `assignment.json`, and pending `manifest.json`.
+6. Link `.agent-artifacts/` to the run directory and verify resolution.
+7. Start the Worker from the assigned worktree root with the assignment path.
+8. Require the Worker preflight handshake before source modification.
+9. Let the Worker implement only within the assigned scope and record deviations.
+10. Let the Worker run correctness tests, benchmarks, and profiling and save raw evidence.
+11. Require the Worker to commit intended changes and finalize `manifest.json` and `report.md`.
+12. Validate the terminal run and write `validation.json`.
+13. Review or audit the exact result commit from a separate worktree when required.
+14. Make and record the accept, reject, supersede, or cancel decision.
+15. Merge through the designated integration path when accepted.
+16. Let the aggregator update shared summaries.
+17. Verify recoverability, then clean up the disposable worktree and eligible branch.
+18. Archive the run without rewriting its evidence and release Coordinator ownership.
 
 For any operator campaign, establish the reference package before step 2 and create the appropriate round and variant records before implementation. Establish a baseline only when the campaign type requires a meaningful comparison point.
 
@@ -1040,6 +1233,10 @@ Assign one writer per mutable file or namespace:
 
 | Resource | Writer |
 |---|---|
+| Coordinator registry and lease | Active Coordinator |
+| Worker `assignment.json` | Coordinator; immutable after dispatch |
+| Active Worker `manifest.json` and `report.md` | Assigned Worker |
+| Run `validation.json` | Coordinator after Worker termination |
 | Source files in a worktree | Assigned implementation agent |
 | Run directory | Assigned run owner |
 | Variant result | Result owner or designated benchmark agent |
@@ -1087,6 +1284,9 @@ Include or adapt this block when dispatching Codex, Claude, Pi, Herdr, or anothe
 
 You own exactly one assigned Git worktree and one run directory.
 
+- Read `.agent-artifacts/assignment.json` before taking any task action.
+- Treat the assignment as immutable and authoritative.
+- Complete the preflight handshake before modifying source.
 - Start and remain at the assigned worktree root for code operations.
 - Confirm the expected branch or detached commit before editing.
 - Do not modify another agent's worktree, branch, run directory, or summary files.
@@ -1109,6 +1309,17 @@ This run belongs to the specified Campaign, Round, and Variant. Read the campaig
 Tool-specific launch commands may differ, but the protocol and ownership rules do not.
 
 ## Role-Specific Instructions
+
+### Coordinator Agent
+
+- Start at the project container root and never edit business source there.
+- Acquire exclusive coordination ownership before allocating mutable identities.
+- Create exact assignments, worktrees, runs, artifact links, and pending manifests.
+- Dispatch Workers with assignment paths rather than large copied context.
+- Treat active Worker run contents as read-only.
+- Validate terminal evidence and write `validation.json` before advancing state.
+- Create a new superseding run for retries; never rewrite execution history.
+- Delegate implementation, independent audit, integration, aggregation, and cleanup according to explicit permissions.
 
 ### Implementation Agent
 
@@ -1163,11 +1374,15 @@ If records conflict, treat exact commits and raw evidence as primary facts, flag
 Do not report completion until all applicable checks pass:
 
 - [ ] Agent operated in the assigned worktree root.
+- [ ] Exactly one Coordinator owned the project or campaign coordination scope.
+- [ ] Every dispatched run retained its immutable `assignment.json`.
+- [ ] Worker preflight verified paths, commits, artifact resolution, inputs, and permissions.
 - [ ] Parallel writers used separate worktrees and branches.
 - [ ] Durable artifacts are outside disposable worktrees.
 - [ ] Run and worktree identities are separately recorded.
 - [ ] `manifest.json` is valid, final, and points to exact commits.
 - [ ] `report.md` summarizes outcome, verification, risks, and handoff.
+- [ ] Coordinator `validation.json` records the completion-gate result.
 - [ ] Raw logs, tests, benchmarks, profiles, and patches use standard directories.
 - [ ] Operator engineering records preserve the complete variant chain.
 - [ ] Reference, oracle, and acceptance criteria are explicit.
@@ -1179,11 +1394,13 @@ Do not report completion until all applicable checks pass:
 
 ## Protocol Summary
 
-Remember these six invariants:
+Remember these eight invariants:
 
 ```text
 one concurrent code-writing agent -> one worktree
 one execution                     -> one run
+one coordination scope            -> one active Coordinator
+one dispatched Worker             -> one immutable assignment
 worktree                          -> disposable code environment
 agent-artifacts                   -> durable evidence and knowledge
 manifest.json                     -> run-to-Git provenance

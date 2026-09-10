@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "assignment_id": "replace-me",
+  "created_at": "1970-01-01T00:00:00Z",
+  "coordinator": {
+    "name": "replace-me",
+    "run_id": "replace-me"
+  },
+  "role": "implementation",
+  "objective": "replace-me",
+  "project": {
+    "container": "/absolute/path/to/project",
+    "repository": "/absolute/path/to/project/repo",
+    "worktree": "/absolute/path/to/project/worktrees/replace-me"
+  },
+  "git": {
+    "branch": "replace-me",
+    "base_commit": "replace-with-full-sha",
+    "target_commit": null
+  },
+  "scope": {
+    "campaign_id": null,
+    "campaign_directory": null,
+    "round_id": null,
+    "variant_id": null
+  },
+  "artifacts": {
+    "run_id": "replace-me",
+    "entrypoint": ".agent-artifacts",
+    "run_directory": "/absolute/path/to/project/agent-artifacts/runs/replace-me"
+  },
+  "inputs": [],
+  "required_outputs": [
+    "manifest.json",
+    "report.md"
+  ],
+  "verification": [],
+  "permissions": {
+    "modify_source": true,
+    "merge": false,
+    "remove_worktree": false,
+    "update_summary": false
+  },
+  "supersedes": null
+}

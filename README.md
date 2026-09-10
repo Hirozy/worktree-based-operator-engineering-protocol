@@ -5,6 +5,9 @@ A reusable skill for coordinating Codex, Claude Code, Pi, Herdr, and other codin
 ## Features
 
 - Assigns an isolated Git worktree to every agent that modifies code, preventing concurrent workspace conflicts.
+- Defines a formal Coordinator role for allocating worktrees, runs, permissions, and lifecycle transitions.
+- Uses immutable `assignment.json` envelopes to pass exact paths, commits, inputs, outputs, and artifact locations to Workers.
+- Adds Worker preflight and Coordinator `validation.json` completion handshakes.
 - Requires agents to start from the root of their assigned worktree.
 - Stores `manifest.json`, `report.md`, tests, logs, benchmarks, profiles, and patches in a shared `agent-artifacts/` area outside disposable worktrees.
 - Models Worktrees and Runs independently so execution history remains traceable after temporary workspaces are removed.
@@ -38,4 +41,7 @@ Then describe the parallel development, operator implementation, optimization, p
 ## Files
 
 - `SKILL.md`: Complete protocol and execution instructions.
+- `templates/assignment.json`: Reusable Worker assignment envelope.
+- `templates/validation.json`: Reusable Coordinator completion record.
+- `schemas/assignment.schema.json`: Machine-readable assignment validation schema.
 - `README.md`: Feature overview and installation instructions.

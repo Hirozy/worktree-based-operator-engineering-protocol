@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "assignment_id": "replace-me",
+  "run_id": "replace-me",
+  "validated_by": {
+    "name": "replace-me",
+    "role": "coordinator"
+  },
+  "validated_at": "replace-with-iso-8601-timestamp",
+  "status": "passed",
+  "checks": {
+    "assignment_identity": "passed",
+    "role_permissions": "passed",
+    "worktree_provenance": "passed",
+    "commit_provenance": "passed",
+    "required_outputs": "passed",
+    "verification_evidence": "passed",
+    "manifest_report_consistency": "passed",
+    "cleanup_readiness": "passed"
+  },
+  "issues": [],
+  "next_action": "replace-me"
+}

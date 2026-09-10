@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Hirozy/worktree-based-operator-engineering-protocol/schemas/assignment.schema.json",
+  "title": "Worker Assignment Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assignment_id",
+    "created_at",
+    "coordinator",
+    "role",
+    "objective",
+    "project",
+    "git",
+    "scope",
+    "artifacts",
+    "inputs",
+    "required_outputs",
+    "verification",
+    "permissions",
+    "supersedes"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "assignment_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "coordinator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "run_id"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "run_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "role": {
+      "type": "string",
+      "enum": ["implementation", "test", "benchmark", "review", "audit", "integration", "aggregation"]
+    },
+    "objective": {"type": "string", "minLength": 1},
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["container", "repository", "worktree"],
+      "properties": {
+        "container": {"type": "string", "minLength": 1},
+        "repository": {"type": "string", "minLength": 1},
+        "worktree": {"type": ["string", "null"]}
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branch", "base_commit", "target_commit"],
+      "properties": {
+        "branch": {"type": ["string", "null"]},
+        "base_commit": {"type": "string", "minLength": 1},
+        "target_commit": {"type": ["string", "null"]}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["campaign_id", "campaign_directory", "round_id", "variant_id"],
+      "properties": {
+        "campaign_id": {"type": ["string", "null"]},
+        "campaign_directory": {"type": ["string", "null"]},
+        "round_id": {"type": ["string", "null"]},
+        "variant_id": {"type": ["string", "null"]}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "entrypoint", "run_directory"],
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "entrypoint": {"const": ".agent-artifacts"},
+        "run_directory": {"type": "string", "minLength": 1}
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "required_outputs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 2,
+      "uniqueItems": true,
+      "allOf": [
+        {"contains": {"const": "manifest.json"}},
+        {"contains": {"const": "report.md"}}
+      ]
+    },
+    "verification": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modify_source", "merge", "remove_worktree", "update_summary"],
+      "properties": {
+        "modify_source": {"type": "boolean"},
+        "merge": {"type": "boolean"},
+        "remove_worktree": {"type": "boolean"},
+        "update_summary": {"type": "boolean"}
+      }
+    },
+    "supersedes": {"type": ["string", "null"]}
+  }
+}
