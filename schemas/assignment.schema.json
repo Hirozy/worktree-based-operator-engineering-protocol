@@ -76,7 +76,7 @@
       "required": ["run_id", "entrypoint", "run_path", "run_directory"],
       "properties": {
         "run_id": {"type": "string", "minLength": 1},
-        "entrypoint": {"const": "agent-artifacts"},
+        "entrypoint": {"const": ".agent-artifacts"},
         "run_path": {
           "type": "string",
           "minLength": 1,

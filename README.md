@@ -8,7 +8,7 @@ A reusable skill for coordinating Codex, Claude Code, Pi, Herdr, and other codin
 - Defines a formal Coordinator role for allocating worktrees, runs, permissions, and lifecycle transitions.
 - Uses immutable `assignment.json` envelopes to pass exact paths, commits, inputs, outputs, and artifact locations to Workers.
 - Adds Worker preflight and Coordinator `validation.json` completion handshakes.
-- Maps each campaign worktree's `agent-artifacts` entrypoint to the Campaign root while restricting execution output to the assigned Run directory.
+- Maps each campaign worktree's `.agent-artifacts` entrypoint to the Campaign root while restricting execution output to the assigned Run directory.
 - Requires agents to start from the root of their assigned worktree.
 - Stores `manifest.json`, `report.md`, tests, logs, benchmarks, profiles, and patches in a shared `agent-artifacts/` area outside disposable worktrees.
 - Models Worktrees and Runs independently so execution history remains traceable after temporary workspaces are removed.

@@ -26,7 +26,7 @@
   },
   "artifacts": {
     "run_id": "replace-me",
-    "entrypoint": "agent-artifacts",
+    "entrypoint": ".agent-artifacts",
     "run_path": "runs/replace-me",
     "run_directory": "/absolute/path/to/project/agent-artifacts/runs/replace-me"
   },
