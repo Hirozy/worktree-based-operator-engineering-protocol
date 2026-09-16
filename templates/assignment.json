@@ -10,7 +10,7 @@
   "objective": "replace-me",
   "project": {
     "container": "/absolute/path/to/project",
-    "repository": "/absolute/path/to/project/repo",
+    "repository": "/absolute/path/to/project/<discovered-primary-worktree-name>",
     "worktree": "/absolute/path/to/project/worktrees/replace-me"
   },
   "git": {

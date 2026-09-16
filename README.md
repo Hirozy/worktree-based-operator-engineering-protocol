@@ -1,11 +1,13 @@
 # Worktree-Based Operator Engineering Protocol
 
-A reusable skill for coordinating Codex, Claude Code, Pi, Herdr, and other coding agents through a consistent multi-agent development and operator engineering protocol.
+A reusable skill for coordinating Codex, Claude Code, Pi, Herdr, and other coding agents through a consistent worktree-based protocol for Huawei Ascend (昇腾) operator engineering.
 
 ## Features
 
-- Assigns an isolated Git worktree to every agent that modifies code, preventing concurrent workspace conflicts.
+- Applies only to operator development, optimization, porting, validation, benchmarking, and audit work that explicitly targets Huawei Ascend hardware or the CANN software stack.
+- Assigns an isolated Git worktree to every agent that modifies Ascend operator code, preventing concurrent workspace conflicts.
 - Defines a formal Coordinator role for allocating worktrees, runs, permissions, and lifecycle transitions.
+- Automatically discovers the actual primary repository directory from Git metadata and the existing layout, without requiring a directory named `repo` or renaming existing checkouts.
 - Uses immutable `assignment.json` envelopes to pass exact paths, commits, inputs, outputs, and artifact locations to Workers.
 - Adds Worker preflight and Coordinator `validation.json` completion handshakes.
 - Maps each campaign worktree's `.agent-artifacts` entrypoint to the Campaign root while restricting execution output to the assigned Run directory.
@@ -13,7 +15,7 @@ A reusable skill for coordinating Codex, Claude Code, Pi, Herdr, and other codin
 - Requires agents to start from the root of their assigned worktree.
 - Stores `manifest.json`, `report.md`, tests, logs, benchmarks, profiles, and patches in a shared `agent-artifacts/` area outside disposable worktrees.
 - Models Worktrees and Runs independently so execution history remains traceable after temporary workspaces are removed.
-- Uses `Project > Campaign > Round > Variant > Run > Artifact` to organize new operator development, optimization, porting, refactoring, and validation.
+- Uses `Project > Campaign > Round > Variant > Run > Artifact` to organize Ascend operator development, optimization, porting, refactoring, and validation.
 - Standardizes specifications, correctness oracles, acceptance criteria, hypotheses, proposals, plans, implementations, results, audits, decisions, and final reports.
 
 ## Installation
@@ -38,7 +40,7 @@ Invoke the skill in an Agent Skills-compatible tool:
 $worktree-based-operator-engineering-protocol
 ```
 
-Then describe the parallel development, operator implementation, optimization, porting, validation, or audit task. The skill guides the agent through worktree isolation, run and artifact recording, Campaign management, and safe cleanup.
+Then describe an Ascend operator implementation, optimization, porting, validation, benchmark, or audit task. The skill should not be invoked for generic software development or non-Ascend-only operator work.
 
 ## Files
 

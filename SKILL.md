@@ -1,15 +1,26 @@
 ---
 name: worktree-based-operator-engineering-protocol
-description: Coordinate Codex, Claude, Pi, Herdr, and other coding agents with a formal Coordinator role, immutable assignment envelopes, isolated Git worktrees, and durable external artifacts. Use for parallel agent work or multi-round operator engineering, including new operator development, optimization, hardware or backend porting, refactoring, validation, and benchmarking, with auditable specifications, hypotheses, variants, runs, evidence, decisions, and cleanup.
+description: "Coordinate Codex, Claude, Pi, Herdr, and other coding agents exclusively for Huawei Ascend (昇腾) operator engineering with a formal Coordinator role, immutable assignment envelopes, isolated Git worktrees, and durable external artifacts. Use only when a task explicitly targets operator development, optimization, porting, refactoring, validation, benchmarking, or audit for Ascend hardware or the CANN software stack. Do not use for generic multi-agent development, non-operator work, or operator tasks targeting only CUDA, ROCm, CPU, or another non-Ascend backend."
 ---
 
 # Worktree-Based Operator Engineering Protocol
 
-Use this protocol to isolate concurrent code changes, preserve execution evidence after worktrees are deleted, and organize iterative operator engineering as a reproducible decision history.
+Use this protocol to isolate concurrent code changes, preserve execution evidence after worktrees are deleted, and organize iterative Huawei Ascend operator engineering as a reproducible decision history.
 
-An operator campaign may create a new operator, optimize an existing operator, port it to another backend or hardware target, refactor it without intended behavior changes, or validate an existing implementation. Do not assume every campaign starts with an optimized or even runnable implementation.
+An Ascend operator campaign may create a new operator, optimize an existing Ascend implementation, port an operator from another backend to Ascend, refactor it without intended behavior changes, or validate an existing Ascend implementation. Do not assume every campaign starts with an optimized or even runnable implementation.
 
-The protocol is agent-neutral. Apply it to Codex, Claude Code, Pi, Herdr, human developers, CI workers, benchmark workers, reviewers, and integrators.
+The protocol is agent-neutral but target-specific. Apply it to Codex, Claude Code, Pi, Herdr, human developers, CI workers, benchmark workers, reviewers, and integrators only within qualifying Ascend operator work.
+
+## Invocation Scope
+
+Invoke this Skill only when the requested work explicitly targets Huawei Ascend (昇腾) operator engineering. Qualifying tasks include:
+
+- Developing operators with Ascend C, TBE, TIK, CANN custom operator APIs, or another Ascend-targeting operator toolchain.
+- Integrating custom operators into CANN, `torch_npu`, MindSpore on Ascend, or an explicitly Ascend-targeted framework/runtime path.
+- Optimizing, profiling, benchmarking, validating, reviewing, or auditing an operator on Ascend hardware.
+- Porting an operator from CUDA, ROCm, CPU, or another backend when Ascend is the explicit destination.
+
+Do not invoke this Skill for generic Git worktree management, ordinary multi-agent software development, application code, model-level optimization without operator implementation work, or operator work that targets only CUDA, ROCm, CPU, or another non-Ascend backend. If the hardware or backend target is unspecified, do not select this Skill automatically.
 
 ## Core Rules
 
@@ -31,7 +42,7 @@ Treat the following as non-negotiable unless the user explicitly overrides them:
 
 ## Conceptual Model
 
-For ordinary multi-agent work, use:
+For standalone Ascend operator work that does not require a campaign, use:
 
 ```text
 Task
@@ -47,7 +58,7 @@ Task
     └── patches/
 ```
 
-For operator engineering, use the full hierarchy:
+For multi-round Ascend operator engineering, use the full hierarchy:
 
 ```text
 Project
@@ -64,8 +75,8 @@ Each level answers a different question:
 
 | Level | Required meaning |
 |---|---|
-| Project | What system or repository are we developing? |
-| Campaign | What operator outcome, target, and constraints are being pursued? |
+| Project | What Ascend operator system or repository are we developing? |
+| Campaign | What Ascend operator outcome, target, and constraints are being pursued? |
 | Round | What bottleneck or question defines this stage? |
 | Variant | Which concrete design, implementation, porting, or optimization hypothesis is being tested? |
 | Run | Which specific agent, test, profile, or benchmark execution occurred? |
@@ -91,11 +102,11 @@ Prefer a project container whose Git worktrees and durable artifacts are sibling
 
 ```text
 <project-container>/
-├── repo/                         # primary worktree, usually main
+├── <primary-worktree-name>/       # existing primary worktree; name is discovered
 ├── worktrees/                    # disposable worktrees
-│   ├── codex-parser-refactor/
-│   ├── claude-api-review/
-│   └── matmul-r003-v002/
+│   ├── codex-layernorm-tiling/
+│   ├── claude-aicore-review/
+│   └── matmul-ascend910b-r003-v002/
 └── agent-artifacts/              # durable, shared, outside worktrees
     ├── runs/                     # non-campaign runs
     ├── campaigns/                # operator engineering campaigns
@@ -104,6 +115,25 @@ Prefer a project container whose Git worktrees and durable artifacts are sibling
 ```
 
 If the existing repository layout differs, preserve it and identify equivalent absolute paths. Never assume that the directory above the repository is writable or safe to modify; inspect first.
+
+### Primary Worktree Discovery
+
+The primary worktree may have any directory name. Never require a directory named `repo`, rename an existing checkout to match an example, or infer its path from a branch name or remote URL.
+
+Before dispatch, the Coordinator must discover the actual paths:
+
+1. Start from the user-provided repository or worktree path, or the current directory when it is inside the intended repository. If starting from a project container, inspect its existing layout to locate the intended checkout. If multiple repositories are plausible, ask the user which one to use.
+2. Use Git metadata rather than directory names:
+
+```bash
+git -C "<existing-worktree-path>" rev-parse --show-toplevel
+git -C "<existing-worktree-path>" worktree list --porcelain
+git -C "<existing-worktree-path>" rev-parse --path-format=absolute --git-common-dir
+```
+
+3. Identify the primary worktree from the main worktree entry in Git's worktree inventory, cross-checking its shared Git metadata. The current checkout may be a linked worktree, and the primary worktree need not use a branch named `main`. Do not treat the common Git directory itself as a code worktree. A bare repository has no primary code worktree; record its actual repository path and use dedicated code worktrees.
+4. Record the discovered absolute repository path in `project.repository` and the assigned execution worktree path in `project.worktree`. Resolve the project container, worktree storage root, and external artifact root independently from the existing layout. Do not construct any of these paths by appending a fixed `repo` directory name.
+5. Preserve existing directory names. If the target repository cannot be identified safely, stop dispatch and request its path instead of creating or assuming a `repo` directory.
 
 Do not put the shared `agent-artifacts/` store inside a disposable worktree. Do not commit raw execution artifacts unless the user explicitly requests it.
 
@@ -114,8 +144,8 @@ Start agents according to role:
 | Role | Startup location |
 |---|---|
 | Coordinator or orchestrator | Project container root; no code worktree |
-| Coder, bug fixer, refactorer | Assigned branch worktree root |
-| Operator implementation agent | Assigned variant worktree root |
+| Ascend operator coder, bug fixer, refactorer | Assigned branch worktree root |
+| Ascend operator implementation agent | Assigned variant worktree root |
 | Tester | Detached worktree at the exact target commit |
 | Reviewer or auditor | Detached read-only worktree, or dedicated review worktree |
 | Integrator | Dedicated integration worktree |
@@ -127,7 +157,8 @@ At startup, verify all of the following before modifying code:
 ```text
 current directory == assigned worktree root
 current branch or detached commit == assignment
-repository root == expected repository
+Git worktree root == assignment project.worktree
+shared Git repository == assignment project.repository
 artifact link == assigned campaign directory, or project artifact root for non-campaign work
 run directory == assignment artifacts.run_directory
 no other active agent owns this worktree
@@ -139,11 +170,11 @@ Never launch a code-writing agent from the project container directory because i
 
 ## Coordinator Role
 
-Use a Coordinator whenever work spans multiple agents, worktrees, runs, variants, or lifecycle stages. A human or deterministic program may fulfill this role, but when an Agent fulfills it, start that Agent at the project container root.
+Use a Coordinator whenever qualifying Ascend operator work spans multiple agents, worktrees, runs, variants, or lifecycle stages. A human or deterministic program may fulfill this role, but when an Agent fulfills it, start that Agent at the project container root.
 
 The Coordinator owns workflow control, not implementation. It must:
 
-- Inspect repository instructions, active worktrees, dirty state, campaign state, and current summaries before dispatch.
+- Discover the actual primary repository and assigned worktree paths without requiring fixed directory names; inspect repository instructions, active worktrees, dirty state, campaign state, and current summaries before dispatch.
 - Allocate collision-free task, campaign, round, variant, worktree, branch, and run identities.
 - Resolve and record exact base commits before creating worktrees.
 - Create Worker run directories, immutable assignment envelopes, initial manifests, and `.agent-artifacts` context links.
@@ -180,27 +211,26 @@ initialized -> planning -> dispatching -> monitoring -> validating
 Create a new branch and worktree from an explicit base branch or commit:
 
 ```bash
-cd <project-container>/repo
-git worktree add \
+git -C "<primary-repository-absolute-path>" worktree add \
   -b agent/<agent>/<task-slug> \
-  ../worktrees/<agent>-<task-slug> \
+  "<worktrees-root-absolute-path>/<agent>-<task-slug>" \
   <base-ref>
 ```
 
-For an operator campaign variant, choose a branch prefix that matches the work:
+For an Ascend operator campaign variant, choose a branch prefix that matches the work:
 
 ```bash
-git worktree add \
+git -C "<primary-repository-absolute-path>" worktree add \
   -b <dev|opt|port|refactor>/<campaign>/r<round>-v<variant>-<slug> \
-  ../worktrees/<campaign-short>-r<round>-v<variant> \
+  "<worktrees-root-absolute-path>/<campaign-short>-r<round>-v<variant>" \
   <base-commit>
 ```
 
 For immutable review or testing:
 
 ```bash
-git worktree add --detach \
-  ../worktrees/review-<target-short> \
+git -C "<primary-repository-absolute-path>" worktree add --detach \
+  "<worktrees-root-absolute-path>/review-<target-short>" \
   <target-commit>
 ```
 
@@ -301,13 +331,13 @@ git check-ignore -v .agent-artifacts
 
 If `.agent-artifacts` is already tracked, stop and report it. Do not remove it from the index or rewrite repository history without explicit authorization.
 
-For a general task, use:
+For a standalone Ascend operator task, use:
 
 ```text
 agent-artifacts/runs/<run-id>/
 ```
 
-For an operator campaign variant, use:
+For an Ascend operator campaign variant, use:
 
 ```text
 agent-artifacts/campaigns/<campaign>/rounds/R<round>/V<variant>-<slug>/runs/<run-id>/
@@ -333,20 +363,20 @@ Minimum assignment schema:
     "run_id": "20260910-095500-herdr-coordinator-01"
   },
   "role": "implementation",
-  "objective": "Implement the reference FP16 RMSNorm operator.",
+  "objective": "Implement the reference FP16 RMSNorm operator for Ascend 910B.",
   "project": {
     "container": "/projects/rmsnorm",
-    "repository": "/projects/rmsnorm/repo",
-    "worktree": "/projects/rmsnorm/worktrees/rmsnorm-r001-v001"
+    "repository": "/projects/rmsnorm/ascend-ops",
+    "worktree": "/projects/rmsnorm/worktrees/rmsnorm-ascend910b-r001-v001"
   },
   "git": {
-    "branch": "dev/rmsnorm-fp16/r001-v001-reference",
+    "branch": "dev/rmsnorm-fp16-ascend910b/r001-v001-reference",
     "base_commit": "<full-sha>",
     "target_commit": null
   },
   "scope": {
-    "campaign_id": "rmsnorm-fp16",
-    "campaign_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16",
+    "campaign_id": "rmsnorm-fp16-ascend910b",
+    "campaign_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16-ascend910b",
     "round_id": "R001",
     "variant_id": "R001-V001"
   },
@@ -354,7 +384,7 @@ Minimum assignment schema:
     "run_id": "20260910-100000-codex-implementation-01",
     "entrypoint": ".agent-artifacts",
     "run_path": "rounds/R001/V001-reference/runs/20260910-100000-codex-implementation-01",
-    "run_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16/rounds/R001/V001-reference/runs/20260910-100000-codex-implementation-01"
+    "run_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16-ascend910b/rounds/R001/V001-reference/runs/20260910-100000-codex-implementation-01"
   },
   "inputs": [
     "reference/specification.md",
@@ -388,6 +418,7 @@ Minimum assignment schema:
 Assignment rules:
 
 - Use absolute paths for host-local project, repository, worktree, and run locations.
+- Populate `project.repository` with the discovered primary worktree or bare repository path, not a directory name imposed by an example. `project.worktree` is the assigned code checkout and may differ.
 - Record the issuing Coordinator and its run ID.
 - Treat `artifacts.entrypoint` as the campaign context root, not as the run directory.
 - Record `artifacts.run_path` relative to the entrypoint and ensure it resolves to `artifacts.run_directory`.
@@ -427,7 +458,7 @@ Before editing, the Worker must verify:
 
 - Current directory equals the assigned worktree root.
 - Current branch or detached commit matches the assignment.
-- The repository root and base or target commit match.
+- The Git worktree root equals `project.worktree`, its shared Git metadata matches `project.repository`, and the base or target commit matches.
 - `.agent-artifacts` resolves to the assigned campaign directory, or project artifact root for non-campaign work.
 - The assigned `run_path` resolves to the declared external `run_directory`.
 - Required input files exist and are readable.
@@ -479,7 +510,7 @@ benchmarks/latency.json
 benchmarks/summary.csv
 logs/build.log
 logs/stdout.log
-profiling/kernel.ncu-rep
+profiling/msprof/
 patches/final.diff
 environment/system.json
 ```
@@ -495,9 +526,9 @@ Minimum schema:
 ```json
 {
   "schema_version": "1.0",
-  "run_id": "20260909-143012-codex-parser-refactor-01",
+  "run_id": "20260909-143012-codex-layernorm-tiling-01",
   "assignment_file": "assignment.json",
-  "task_id": "parser-refactor",
+  "task_id": "layernorm-tiling",
   "agent": {
     "name": "codex",
     "role": "implementation"
@@ -518,13 +549,13 @@ Minimum schema:
     "variant_id": null
   },
   "git": {
-    "branch": "agent/codex/parser-refactor",
-    "worktree": "worktrees/codex-parser-refactor",
+    "branch": "agent/codex/layernorm-tiling",
+    "worktree": "worktrees/codex-layernorm-tiling",
     "base_commit": "<full-sha>",
     "result_commit": "<full-sha>"
   },
   "outcome": {
-    "summary": "Refactored parser state handling.",
+    "summary": "Implemented Ascend LayerNorm tiling changes.",
     "tests": "passed",
     "benchmarks": "not_run"
   },
@@ -679,7 +710,7 @@ Define the operator capability or engineering outcome. Add target metrics when a
 
 ## Scope
 
-Name the operator, semantics, API, workloads, shapes, data types, layouts, backends, and supported hardware.
+Name the Ascend operator, semantics, API, workloads, shapes, data types, layouts, CANN or framework integration path, and supported Ascend hardware.
 
 ## Constraints
 
@@ -707,8 +738,8 @@ Campaign `manifest.json` should include:
 ```json
 {
   "schema_version": "1.0",
-  "campaign_id": "fused-rmsnorm-fp16-sm90",
-  "title": "Fused RMSNorm FP16 Operator for SM90",
+  "campaign_id": "fused-rmsnorm-fp16-ascend910b",
+  "title": "Fused RMSNorm FP16 Operator for Ascend 910B",
   "campaign_type": "new-development",
   "status": "active",
   "created_at": "2026-09-09T10:00:00+08:00",
@@ -753,14 +784,14 @@ Apply baseline requirements by campaign type:
 |---|---|
 | `new-development` | Reference/oracle and explicit acceptance targets; baseline may be `null` |
 | `optimization` | Exact existing implementation commit and audited performance baseline |
-| `porting` | Source-backend behavior plus target-backend acceptance criteria; performance baseline when meaningful |
+| `porting` | Source-backend behavior plus Ascend target acceptance criteria; performance baseline when meaningful |
 | `refactor` | Exact behavior/correctness baseline and performance non-regression threshold |
 | `validation` | Claimed implementation commit and stated expected behavior or metrics |
 
 When a baseline applies, create and audit it before accepting comparative claims. Record:
 
 - Exact baseline commit and whether the worktree was clean.
-- Hardware model, accelerator architecture, driver, runtime, compiler, build flags, power and clock policy.
+- Ascend hardware model and SoC version, firmware, driver, CANN toolkit/runtime/compiler, build flags, power mode, and clock policy.
 - Operating system, relevant libraries, environment variables with secrets removed, and dependency versions.
 - Input shapes, data types, layouts, distributions, seeds, warm-up count, measurement count, synchronization method, and timing method.
 - Correctness oracle, tolerances, determinism requirements, and test coverage.
@@ -900,7 +931,7 @@ Report observed results without making the acceptance decision. Include:
 ## Specification and Integration
 
 - API/ABI conformance:
-- Supported shapes, types, layouts, and hardware:
+- Supported shapes, types, layouts, and Ascend hardware:
 - Framework or runtime integration:
 - Unsupported or incomplete behavior:
 
@@ -938,7 +969,7 @@ Prefer an auditor who did not implement the variant. Audit:
 - Test coverage and input representativeness.
 - Warm-up, synchronization, iteration count, cache effects, frequency policy, variance, outliers, and statistical confidence.
 - Reproducibility from the recorded commit and environment.
-- Hardware and software compatibility.
+- Ascend hardware, firmware, driver, CANN, framework, and software compatibility.
 - Memory consumption, maintainability, and operational risk.
 - Whether reported tables match raw artifacts.
 
@@ -993,15 +1024,15 @@ Maintain a compact machine-readable index alongside the narrative documents:
 {
   "schema_version": "1.0",
   "variant_id": "R002-V001",
-  "name": "single-pass-warp-reduction",
+  "name": "single-pass-vector-reduction",
   "status": "superseded",
-  "campaign_id": "fused-rmsnorm-fp16-sm90",
+  "campaign_id": "fused-rmsnorm-fp16-ascend910b",
   "round_id": "R002",
-  "branch": "dev/fused-rmsnorm-fp16-sm90/r002-v001-single-pass-warp-reduction",
+  "branch": "dev/fused-rmsnorm-fp16-ascend910b/r002-v001-single-pass-vector-reduction",
   "base_commit": "<full-sha>",
   "result_commit": "<full-sha>",
   "runs": [
-    "runs/20260909-143012-codex-single-pass-warp-reduction-01",
+    "runs/20260909-143012-codex-single-pass-vector-reduction-01",
     "runs/20260909-151820-claude-audit-01"
   ],
   "requirements": {
@@ -1086,7 +1117,7 @@ Create only when the campaign is completed or explicitly closed. Include:
 - Key accepted and rejected hypotheses.
 - Final implementation and exact commit.
 - Final correctness and audited performance.
-- Supported hardware and workload range.
+- Supported Ascend hardware and workload range.
 - Known risks and limitations.
 - Reproduction steps and artifact index.
 - Unresolved questions and future directions.
@@ -1105,7 +1136,7 @@ General implementation:
 agent/<agent>/<task-slug>
 ```
 
-Operator campaign implementation:
+Ascend operator campaign implementation:
 
 ```text
 dev/<campaign>/rNNN-vNNN-<variant-slug>
@@ -1123,12 +1154,12 @@ review/<campaign>/rNNN-vNNN-<scope>
 Examples:
 
 ```text
-agent/codex/parser-refactor
-agent/claude/api-audit
-dev/fused-rmsnorm-fp16-sm90/r001-v001-two-pass-reference
-opt/matmul-fp16/r003-v002-double-buffering
-port/layernorm-rocm/r002-v001-wave64
-review/matmul-fp16/r003-v002-correctness
+agent/codex/layernorm-tiling
+agent/claude/aicore-audit
+dev/fused-rmsnorm-fp16-ascend910b/r001-v001-two-pass-reference
+opt/matmul-fp16-ascend910b/r003-v002-double-buffering
+port/layernorm-ascend910b/r002-v001-vector-core
+review/matmul-fp16-ascend910b/r003-v002-correctness
 ```
 
 ### Worktrees
@@ -1153,8 +1184,8 @@ variant:  VNNN-<mechanism>
 Examples:
 
 ```text
-matmul-fp16
-flash-attention-sm90
+matmul-fp16-ascend910b
+flash-attention-ascend910b
 R003
 V002-double-buffering
 ```
@@ -1249,7 +1280,7 @@ Do not skip directly to a success state without the required evidence. `accepted
 
 The Coordinator follows this sequence for a code-changing task:
 
-1. Inspect the repository, instructions, active worktrees, and dirty state.
+1. Discover the actual primary repository path and existing project layout; inspect instructions, active worktrees, and dirty state.
 2. Acquire Coordinator ownership for the project or campaign scope.
 3. Define task, role, owner, base ref, branch, worktree, and run ID.
 4. Create the branch and worktree from an explicit commit.
@@ -1268,7 +1299,7 @@ The Coordinator follows this sequence for a code-changing task:
 17. Verify recoverability, then clean up the disposable worktree and eligible branch.
 18. Archive the run without rewriting its evidence and release Coordinator ownership.
 
-For any operator campaign, establish the reference package before step 2 and create the appropriate round and variant records before implementation. Establish a baseline only when the campaign type requires a meaningful comparison point.
+For any Ascend operator campaign, establish the reference package before step 2 and create the appropriate round and variant records before implementation. Establish a baseline only when the campaign type requires a meaningful comparison point.
 
 ## Concurrency and Ownership
 
@@ -1344,10 +1375,10 @@ You own exactly one assigned Git worktree and one run directory.
 - Do not merge, delete branches, remove worktrees, or rewrite shared summaries unless that role is explicitly assigned.
 ```
 
-For operator campaign work, append:
+For Ascend operator campaign work, append:
 
 ```markdown
-This run belongs to the specified Campaign, Round, and Variant. Read the campaign README, reference package, applicable baseline, current `summary/status.md`, round analysis, and the variant's preceding record documents before acting. Preserve the chain `hypothesis -> proposal -> plan -> implementation -> result -> audit -> decision`. Raw evidence belongs in the run directory; conclusions belong in the variant documents. For new development, validate specification, oracle, integration, and acceptance targets. For optimization or refactoring, also compare valid results against the original baseline and current selection. Do not invent an inapplicable baseline. Do not accept your own result unless decision authority is explicitly assigned.
+This run is Huawei Ascend operator work and belongs to the specified Campaign, Round, and Variant. Confirm the assigned Ascend hardware and CANN or framework target, then read the campaign README, reference package, applicable baseline, current `summary/status.md`, round analysis, and the variant's preceding record documents before acting. Preserve the chain `hypothesis -> proposal -> plan -> implementation -> result -> audit -> decision`. Raw evidence belongs in the run directory; conclusions belong in the variant documents. For new development, validate specification, oracle, Ascend integration, and acceptance targets. For optimization or refactoring, also compare valid results against the original baseline and current selection. Do not invent an inapplicable baseline. Do not accept your own result unless decision authority is explicitly assigned.
 ```
 
 Tool-specific launch commands may differ, but the protocol and ownership rules do not.
@@ -1403,7 +1434,7 @@ Tool-specific launch commands may differ, but the protocol and ownership rules d
 
 When joining an existing project or campaign:
 
-1. Locate the project container, repository, worktrees, and durable `agent-artifacts/` root.
+1. Rediscover the actual project container, primary repository, worktrees, and durable `agent-artifacts/` root from the existing layout and Git metadata, without assuming fixed directory names.
 2. Read repository instructions and inspect active worktrees.
 3. For campaigns, read `README.md`, `manifest.json`, the reference package, applicable baseline documents, `summary/status.md`, `summary/decisions.md`, and the current round.
 4. Inspect the target variant and all prior documents in its record chain.
