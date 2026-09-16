@@ -58,7 +58,7 @@ Task
     └── patches/
 ```
 
-For multi-round Ascend operator engineering, use the full hierarchy:
+For multi-round Ascend operator engineering, use the following logical hierarchy (not mandatory directory nesting):
 
 ```text
 Project
@@ -109,10 +109,10 @@ Prefer a project container whose Git worktrees and durable artifacts are sibling
 │   └── matmul-ascend910b-r003-v002/
 └── agent-artifacts/              # durable, shared, outside worktrees
     ├── runs/                     # non-campaign runs
-    ├── campaigns/                # operator engineering campaigns
-    ├── summary/                  # project-level aggregation
-    └── registry/                 # Coordinator-owned indexes and leases
+    └── campaigns/                # operator engineering campaigns
 ```
+
+Only `campaigns/` and standalone `runs/` are default top-level artifact directories. Create directories on demand rather than empty scaffolding. Project-level `summary/` and `registry/` are optional extensions when aggregation or coordination needs them.
 
 If the existing repository layout differs, preserve it and identify equivalent absolute paths. Never assume that the directory above the repository is writable or safe to modify; inspect first.
 
@@ -340,7 +340,7 @@ agent-artifacts/runs/<run-id>/
 For an Ascend operator campaign variant, use:
 
 ```text
-agent-artifacts/campaigns/<campaign>/rounds/R<round>/V<variant>-<slug>/runs/<run-id>/
+agent-artifacts/campaigns/<campaign>/runs/<run-id>/
 ```
 
 Do not duplicate a run in both locations. Store it at its canonical path and put only an index entry or relative reference in a project registry when global discovery is needed.
@@ -378,21 +378,22 @@ Minimum assignment schema:
     "campaign_id": "rmsnorm-fp16-ascend910b",
     "campaign_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16-ascend910b",
     "round_id": "R001",
-    "variant_id": "R001-V001"
+    "variant_id": "V001"
   },
   "artifacts": {
     "run_id": "20260910-100000-codex-implementation-01",
     "entrypoint": ".agent-artifacts",
-    "run_path": "rounds/R001/V001-reference/runs/20260910-100000-codex-implementation-01",
-    "run_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16-ascend910b/rounds/R001/V001-reference/runs/20260910-100000-codex-implementation-01"
+    "run_path": "runs/20260910-100000-codex-implementation-01",
+    "run_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16-ascend910b/runs/20260910-100000-codex-implementation-01"
   },
   "inputs": [
     "reference/specification.md",
     "reference/api-contract.md",
     "reference/oracle.md",
     "reference/acceptance.md",
-    "rounds/R001/analysis.md",
-    "rounds/R001/V001-reference/plan.md"
+    "manifest.json",
+    "summary/status.md",
+    "variants/V001/plan.md"
   ],
   "required_outputs": [
     "manifest.json",
@@ -675,24 +676,26 @@ agent-artifacts/campaigns/<campaign>/
 │   ├── benchmark.md
 │   ├── correctness.json
 │   └── profiling/
-├── rounds/
-│   ├── R001/
-│   │   ├── README.md
-│   │   ├── analysis.md
-│   │   ├── V001-vectorized-load/
-│   │   │   ├── manifest.json
-│   │   │   ├── hypothesis.md
-│   │   │   ├── proposal.md
-│   │   │   ├── plan.md
-│   │   │   ├── implementation.md
-│   │   │   ├── result.md
-│   │   │   ├── audit.md
-│   │   │   ├── decision.md
-│   │   │   └── runs/
-│   │   │       ├── <run-id>/
-│   │   │       └── <run-id>/
-│   │   └── V002-cache-blocking/
-│   └── R002/
+├── variants/
+│   └── V001/
+│       ├── manifest.json
+│       ├── hypothesis.md
+│       ├── proposal.md
+│       ├── plan.md
+│       ├── implementation.md
+│       ├── result.md
+│       ├── audit.md
+│       └── decision.md
+├── runs/
+│   └── <run-id>/
+│       ├── assignment.json
+│       ├── worker-start.md
+│       ├── protocol/
+│       ├── manifest.json
+│       ├── report.md
+│       ├── tests/
+│       ├── logs/
+│       └── benchmarks/
 └── summary/
     ├── status.md
     ├── timeline.md
@@ -700,6 +703,10 @@ agent-artifacts/campaigns/<campaign>/
     ├── decisions.md
     └── final-report.md
 ```
+
+Variants and runs are flat within their respective campaign directories. Round is metadata, not a required parent directory. Assignments record `scope.round_id` and campaign-unique `scope.variant_id`; variant manifests record their round and campaign-relative Run references. Keep `.agent-artifacts` mapped to the Campaign root, not a Variant or Run.
+
+Create directories only when needed. Preserve existing immutable runs and assignments at their original paths; do not migrate historical evidence. New runs use the flat layout. Validate legacy assignments using their retained protocol schema.
 
 `reference/` is required for every campaign. `baseline/` is required only when there is a meaningful existing behavior or performance point to compare against. Do not create fake baseline measurements for a genuinely new operator.
 
@@ -776,12 +783,16 @@ Campaign `manifest.json` should include:
   },
   "baseline": null,
   "current_selection": {
-    "variant_id": "R002-V001",
+    "variant_id": "V003",
     "commit": "<full-sha>",
     "readiness": "validation"
   },
   "current_round": "R003",
-  "rounds": ["R001", "R002", "R003"]
+  "rounds": [
+    {"round_id": "R001", "status": "closed", "variant_ids": ["V001", "V002"]},
+    {"round_id": "R002", "status": "closed", "variant_ids": ["V003"]},
+    {"round_id": "R003", "status": "active", "variant_ids": ["V004"]}
+  ]
 }
 ```
 
@@ -824,7 +835,7 @@ If the environment changes materially, either re-establish the baseline or mark 
 
 A round represents one cycle of observation, competing attempts, and decision. It is not a single benchmark or commit.
 
-`rounds/RNNN/analysis.md` must identify:
+Round records live in the campaign manifest's `rounds` array, including `round_id`, status, and campaign-unique `variant_ids`. They do not require a directory. The current round analysis in `summary/status.md` must identify:
 
 - Starting commit and starting variant.
 - Current bottleneck and supporting evidence.
@@ -832,7 +843,7 @@ A round represents one cycle of observation, competing attempts, and decision. I
 - Candidate mechanisms worth testing.
 - Reference contract and constraints inherited from the campaign.
 
-`rounds/RNNN/README.md` is a stage-level snapshot:
+Use the following section in `summary/status.md` for the active round. At closure, the aggregator appends its findings to `summary/timeline.md` and its decision to `summary/decisions.md` before replacing the current snapshot:
 
 ```markdown
 # Round RNNN — <Theme>
@@ -1041,12 +1052,12 @@ Maintain a compact machine-readable index alongside the narrative documents:
 ```json
 {
   "schema_version": "1.0",
-  "variant_id": "R002-V001",
+  "variant_id": "V003",
   "name": "single-pass-vector-reduction",
   "status": "superseded",
   "campaign_id": "fused-rmsnorm-fp16-ascend910b",
   "round_id": "R002",
-  "branch": "dev/fused-rmsnorm-fp16-ascend910b/r002-v001-single-pass-vector-reduction",
+  "branch": "dev/fused-rmsnorm-fp16-ascend910b/r002-v003-single-pass-vector-reduction",
   "base_commit": "<full-sha>",
   "result_commit": "<full-sha>",
   "runs": [
@@ -1069,11 +1080,11 @@ Maintain a compact machine-readable index alongside the narrative documents:
 }
 ```
 
-Narrative documents remain authoritative for reasoning. The manifest is the index for automation and dashboards.
+All `runs` references in a variant manifest are relative to the Campaign root, not the variant directory. Narrative documents remain authoritative for reasoning. The manifest is the index for automation and dashboards.
 
 ## Summary Protocol
 
-Treat `rounds/` as history and `summary/` as current campaign knowledge. Only the designated aggregator updates shared summary files.
+Treat `variants/` and `runs/` as evidence history and `summary/` as current campaign knowledge with append-only timeline and decision records. Only the designated aggregator updates shared summary files.
 
 ### `summary/status.md`
 
@@ -1196,7 +1207,7 @@ integration-<project-short>
 ```text
 campaign: <operator-or-area>-<dtype-or-target>
 round:    RNNN
-variant:  VNNN-<mechanism>
+variant:  VNNN
 ```
 
 Examples:
@@ -1205,10 +1216,10 @@ Examples:
 matmul-fp16-ascend910b
 flash-attention-ascend910b
 R003
-V002-double-buffering
+V002
 ```
 
-Restart variant numbering within each round. Never rename a decided round or variant merely because priorities changed.
+Allocate variant numbers uniquely across the Campaign; never restart numbering in a new Round. Store the mechanism in the manifest's `name` and use `variants/VNNN/` as its directory. Never rename a decided round or variant merely because priorities changed.
 
 ### Runs
 
@@ -1334,7 +1345,8 @@ Assign one writer per mutable file or namespace:
 | Variant result | Result owner or designated benchmark agent |
 | Variant audit | Independent auditor |
 | Variant decision | Campaign decision owner |
-| Round README | Round owner |
+| Round metadata in campaign manifest | Coordinator |
+| Round analysis and closure records in summary | Single aggregator using round-owner evidence |
 | Shared summary files | Single aggregator |
 | Integration branch | Integrator |
 

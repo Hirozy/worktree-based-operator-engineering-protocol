@@ -15,8 +15,30 @@
 - 要求 Agent 在各自分配的 worktree 根目录启动。
 - 将 `manifest.json`、`report.md`、测试、日志、基准测试数据、性能分析数据和补丁保存在临时 worktree 之外的共享 `agent-artifacts/` 区域。
 - 将 Worktree 与 Run 分离建模，确保临时工作区删除后，执行历史仍可追溯。
-- 使用 `Project > Campaign > Round > Variant > Run > Artifact`（项目 > 专题 > 轮次 > 方案 > 执行 > 产物）层级组织昇腾算子开发、优化、移植、重构和验证工作。
+- 使用 `Project > Campaign > Round > Variant > Run > Artifact`（项目 > 专题 > 轮次 > 方案 > 执行 > 产物）逻辑层级组织昇腾算子开发、优化、移植、重构和验证工作。
 - 统一规范规格说明、正确性判定依据、验收标准、假设、提案、计划、实现、结果、审计、决策和最终报告。
+
+## 产物目录
+
+默认顶层目录为 `campaigns/` 和独立任务的 `runs/`，均按需创建：
+
+```text
+agent-artifacts/
+├── campaigns/
+│   └── <campaign-id>/
+│       ├── README.md
+│       ├── manifest.json
+│       ├── reference/          # 规格、正确性依据与验收标准
+│       ├── baseline/           # 有适用基线时创建
+│       ├── variants/
+│       │   └── V001/           # 假设、提案、计划、实现、结果、审计、决策
+│       ├── runs/
+│       │   └── <run-id>/       # 合同、启动引导、协议快照、报告与原始证据
+│       └── summary/            # 状态、时间线、对比、决策与最终报告
+└── runs/                       # 不属于 Campaign 的执行记录
+```
+
+Round 作为元数据保存在专题清单和任务合同中，不再创建轮次目录。Variant 编号在整个 Campaign 内唯一，不随 Round 重置。专题任务的 `.agent-artifacts` 仍指向 Campaign 根目录，合同位于 `.agent-artifacts/runs/<run-id>/assignment.json`；非专题任务的入口指向项目产物根目录。已有历史记录保留原路径，不自动迁移。
 
 ## 安装
 

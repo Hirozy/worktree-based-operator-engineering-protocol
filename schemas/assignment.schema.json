@@ -80,7 +80,7 @@
         "run_path": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^(runs|rounds)/"
+          "pattern": "^runs/[A-Za-z0-9][A-Za-z0-9._-]*$"
         },
         "run_directory": {"type": "string", "minLength": 1}
       }
