@@ -42,10 +42,23 @@ $worktree-based-operator-engineering-protocol
 
 然后描述需要完成的昇腾算子实现、优化、移植、验证、基准测试或审计任务。通用软件开发任务，或仅面向非昇腾后端的算子任务，不应调用此 Skill。
 
+### 新 Agent 的启动引导
+
+新建 worktree 不会继承主 Agent 已加载的 Skill。Coordinator 必须在执行 Run 中保存协议快照 `protocol/`，并根据模板生成 `worker-start.md`，明确指定协议和任务合同的位置。
+
+在分配的 worktree 根目录启动新 Agent 后，发送以下首条指令（将 `<run-path>` 替换为实际路径）：
+
+```text
+先读取 .agent-artifacts/<run-path>/worker-start.md，按照其中的指令加载协议和 assignment.json，完成启动前检查后再执行任务。
+```
+
+自动启动时，由 Coordinator 将同样的指令作为初始提示传入。不要依赖空白会话自动发现 Skill；不同 Agent 的原生发现机制需单独确认。
+
 ## 文件说明
 
 - `SKILL.md`：完整的协作协议与执行指令。
 - `templates/assignment.json`：可复用的 Worker 任务合同模板。
+- `templates/worker-start.md`：新 Agent 的协议加载与任务启动引导模板。
 - `templates/validation.json`：可复用的 Coordinator 完成验收记录模板。
 - `schemas/assignment.schema.json`：用于机器校验任务合同的 JSON Schema。
 - `README.md`：功能概览与安装说明。

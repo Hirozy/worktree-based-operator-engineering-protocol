@@ -437,6 +437,24 @@ The Coordinator passes the assignment through three compatible channels:
 
 Do not rely on environment inheritance alone because remote, desktop, and delegated Agent runtimes may not preserve it. Do not paste large artifacts into the prompt; pass exact file paths and commits.
 
+### Worker Skill Bootstrap
+
+Creating a worktree does not transfer the Coordinator's conversation, activated skills, or local skill installation to a new Agent. The artifact symlink and assignment alone do not activate this protocol. Do not assume that starting an Agent in the worktree automatically loads the skill.
+
+Before dispatch, the Coordinator must:
+
+1. Copy the currently used skill package (`SKILL.md`, `templates/`, and `schemas/`) into the assigned external Run directory as `protocol/`. Preserve relative references and freeze this snapshot after dispatch. Do not copy credentials, Git metadata, or unrelated files.
+2. Render `templates/worker-start.md` into that Run as `worker-start.md`, replacing every placeholder with the exact worktree path and run-relative paths. This file identifies the Worker role, the protocol snapshot, and the immutable assignment. It is a bootstrap instruction, not a second assignment.
+3. Start the Worker at its assigned worktree root and include this instruction in its initial prompt: `Read .agent-artifacts/<run-path>/worker-start.md and follow its startup instructions before any task action.` Substitute the actual run path; never dispatch unresolved placeholders.
+4. For a manually started Agent, give the user the exact worktree directory and that same initial prompt. Starting a blank conversation is not a completed dispatch.
+5. Require the Worker to read the protocol snapshot and assignment and record their resolved paths plus the assignment ID in its preflight result before editing code.
+
+A native skill installation may be used additionally, but must not replace the explicit startup instruction or the frozen run snapshot. This fallback works through ordinary file reading and does not depend on a shared skill registry or inherited environment variables.
+
+If zero-prompt startup is required, first verify which project instruction file the selected Agent actually discovers. A short pointer to the exact `worker-start.md` may be placed there; do not assume Codex, Claude, Pi, and Herdr share discovery rules. Preserve all existing repository instructions. Do not overwrite tracked instruction files, hide tracked edits using Git flags, or change global Agent settings. If adding a new untracked instruction file, record Coordinator ownership, exclude its exact root-relative path locally, and remove it during cleanup only if its contents remain unchanged. If safe automatic discovery cannot be established, use the explicit initial prompt instead.
+
+When reusing a worktree for a later Run, stop the previous Worker first and update any Coordinator-owned startup pointer to the new exact Run. Never select an assignment through `latest`, a directory scan, or an ambiguous campaign-level default. If startup files are missing, unreadable, or inconsistent, stop before source edits and report the problem; do not silently fall back to an unrelated installed skill.
+
 ### Ownership Transfer
 
 Use this single-writer sequence:
@@ -1286,7 +1304,7 @@ The Coordinator follows this sequence for a code-changing task:
 4. Create the branch and worktree from an explicit commit.
 5. Create the durable run directory, immutable `assignment.json`, and pending `manifest.json`.
 6. Add the repository-local exclude rule, link `.agent-artifacts/`, and verify both the ignore rule and assigned run path.
-7. Start the Worker from the assigned worktree root with the assignment path.
+7. Freeze the run-local protocol snapshot, render `worker-start.md`, and start the Worker from its assigned worktree root with an explicit prompt to read that bootstrap.
 8. Require the Worker preflight handshake before source modification.
 9. Let the Worker implement only within the assigned scope and record deviations.
 10. Let the Worker run correctness tests, benchmarks, and profiling and save raw evidence.
@@ -1358,7 +1376,7 @@ Include or adapt this block when dispatching Codex, Claude, Pi, Herdr, or anothe
 
 You own exactly one assigned Git worktree and one run directory.
 
-- Read the exact `.agent-artifacts/<run-path>/assignment.json` supplied in the launch prompt before taking any task action.
+- Read the exact `worker-start.md` supplied in the launch prompt, then its run-local protocol snapshot and `.agent-artifacts/<run-path>/assignment.json` before taking any task action.
 - Treat the assignment as immutable and authoritative.
 - Complete the preflight handshake before modifying source.
 - Start and remain at the assigned worktree root for code operations.
@@ -1390,7 +1408,7 @@ Tool-specific launch commands may differ, but the protocol and ownership rules d
 - Start at the project container root and never edit business source there.
 - Acquire exclusive coordination ownership before allocating mutable identities.
 - Create exact assignments, worktrees, runs, artifact links, and pending manifests.
-- Dispatch Workers with assignment paths rather than large copied context.
+- Prepare frozen run-local protocol snapshots and startup files; dispatch Workers with explicit startup paths rather than assuming skill inheritance.
 - Treat active Worker run contents as read-only.
 - Validate terminal evidence and write `validation.json` before advancing state.
 - Create a new superseding run for retries; never rewrite execution history.
