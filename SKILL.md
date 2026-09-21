@@ -1,55 +1,74 @@
 ---
 name: worktree-based-operator-engineering-protocol
-description: "Coordinate Codex, Claude, Pi, Herdr, and other coding agents exclusively for Huawei Ascend (昇腾) operator engineering with a formal Coordinator role, immutable assignment envelopes, isolated Git worktrees, and durable external artifacts. Use only when a task explicitly targets operator development, optimization, porting, refactoring, validation, benchmarking, or audit for Ascend hardware or the CANN software stack. Do not use for generic multi-agent development, non-operator work, or operator tasks targeting only CUDA, ROCm, CPU, or another non-Ascend backend."
+description: "仅用于面向华为昇腾硬件或 CANN 软件栈的算子工程，通过编排者角色、不可变任务合约、独立 Git worktree 和持久化外部产物，协调 Codex、Claude、Pi、Herdr 等编程 Agent。仅在任务明确涉及昇腾算子开发、优化、移植、重构、验证、基准测试或审计时使用。禁止用于通用多 Agent 软件开发、非算子任务，或仅面向 CUDA、ROCm、CPU 等非昇腾后端的算子任务。"
 ---
 
-# Worktree-Based Operator Engineering Protocol
+# 基于 Git worktree 的昇腾算子工程协议
 
-Use this protocol to isolate concurrent code changes, preserve execution evidence after worktrees are deleted, and organize iterative Huawei Ascend operator engineering as a reproducible decision history.
+本协议用于隔离并发代码修改，在删除工作树后保留执行证据，并将昇腾算子迭代过程组织为可复现的决策记录。
 
-An Ascend operator campaign may create a new operator, optimize an existing Ascend implementation, port an operator from another backend to Ascend, refactor it without intended behavior changes, or validate an existing Ascend implementation. Do not assume every campaign starts with an optimized or even runnable implementation.
+一个专题（Campaign）可以开发新算子、优化现有昇腾实现、将其他后端的算子移植到昇腾、在保持行为的前提下重构，或验证已有实现。禁止假定每个专题开始时都已有经过优化、甚至能够运行的实现。
 
-The protocol is agent-neutral but target-specific. Apply it to Codex, Claude Code, Pi, Herdr, human developers, CI workers, benchmark workers, reviewers, and integrators only within qualifying Ascend operator work.
+协议不限定 Agent 工具，但限定目标平台。Codex、Claude Code、Pi、Herdr、人工开发者、CI 执行器、基准测试执行者、审查者和集成者均可参与符合适用范围的昇腾算子任务。
 
-## Invocation Scope
+## 适用范围
 
-Invoke this Skill only when the requested work explicitly targets Huawei Ascend (昇腾) operator engineering. Qualifying tasks include:
+只有任务明确面向华为昇腾算子工程时，才使用本 Skill。适用任务包括：
 
-- Developing operators with Ascend C, TBE, TIK, CANN custom operator APIs, or another Ascend-targeting operator toolchain.
-- Integrating custom operators into CANN, `torch_npu`, MindSpore on Ascend, or an explicitly Ascend-targeted framework/runtime path.
-- Optimizing, profiling, benchmarking, validating, reviewing, or auditing an operator on Ascend hardware.
-- Porting an operator from CUDA, ROCm, CPU, or another backend when Ascend is the explicit destination.
+- 使用 Ascend C、TBE、TIK、CANN 自定义算子 API 或其他面向昇腾的工具链开发算子。
+- 将自定义算子接入 CANN、`torch_npu`、昇腾上的 MindSpore，或其他明确面向昇腾的框架与运行时。
+- 在昇腾硬件上进行算子优化、性能分析、基准测试、验证、代码审查或审计。
+- 将 CUDA、ROCm、CPU 等后端的算子移植到明确指定的昇腾目标。
 
-Do not invoke this Skill for generic Git worktree management, ordinary multi-agent software development, application code, model-level optimization without operator implementation work, or operator work that targets only CUDA, ROCm, CPU, or another non-Ascend backend. If the hardware or backend target is unspecified, do not select this Skill automatically.
+禁止将本 Skill 用于通用 Git worktree 管理、普通多 Agent 软件开发、应用代码、不涉及算子实现的模型级优化，以及仅面向非昇腾后端的算子任务。硬件或后端目标未指定时，禁止自动选用本 Skill。
 
-## Core Rules
+## 术语与约束用语
 
-Treat the following as non-negotiable unless the user explicitly overrides them:
+正文统一使用中文；字段名、路径、命令、状态值及机器接口保留英文。主要术语如下，后文按角色和上下文使用中文简称：
 
-1. Give every concurrent code-writing agent its own Git worktree.
-2. Start a code-writing agent at the root of its assigned worktree.
-3. Keep persistent reports and raw execution artifacts outside disposable worktrees, under the project-level `agent-artifacts/` directory.
-4. Model a worktree and a run separately: a worktree is an execution location; a run is one recorded execution.
-5. Give every run a unique immutable directory. Never overwrite an earlier run with a retry.
-6. Bind each completed run to exact Git commits through `manifest.json`.
-7. Do not let parallel agents write the same summary file. Use one designated aggregator.
-8. Preserve failed and rejected work with its evidence and decision rationale.
-9. Treat worktrees as disposable and artifacts as durable.
-10. Never delete a worktree until code state and required evidence are recoverable.
-11. Assign exactly one active Coordinator to each project or campaign coordination scope.
-12. Give every dispatched Worker an immutable `assignment.json` that identifies exact paths, commits, permissions, inputs, and required outputs.
-13. Keep `.agent-artifacts` out of Git by maintaining the repository-local excludes file; do not modify global Git configuration for this purpose.
+| 术语 | 含义 |
+|---|---|
+| 编排者（Coordinator） | 负责派发、协调、验收和流程推进 |
+| 执行者（Worker） | 根据合约执行具体任务 |
+| 专题（Campaign） | 一个完整的算子工程目标 |
+| 方案（Variant，简称 V） | 一个具体假设或实现方案 |
+| 执行记录（Run） | 一次执行及其身份、状态和证据；后文简称“执行” |
+| 工作树（Git worktree） | 独立的代码检出与操作位置 |
+| 产物（Artifact） | 执行产生的原始或派生证据 |
+| 汇总者（Aggregator） | 共享汇总文件的唯一写入者 |
+| 集成者（Integrator） | 负责合并和集成验证 |
+| 正确性判定依据（Oracle） | 用于判断实现结果是否正确的参考依据 |
 
-## Conceptual Model
+“必须”表示完成协议所需的要求；“禁止”表示不允许的行为；“建议”表示优先采用但允许有理由调整；“可选”表示按任务需要使用。步骤式指令和检查清单在适用时必须执行；标注为建议或可选的内容除外。用户明确覆盖的规则以用户指令为准。
 
-For standalone Ascend operator work that does not require a campaign, use:
+## 核心规则
+
+除非用户明确覆盖，否则必须遵守：
+
+1. 每个并发修改代码的 Agent 必须拥有独立工作树。
+2. 修改代码的 Agent 必须从分配的工作树根目录启动。
+3. 持久报告和原始执行产物必须保存在可清理工作树之外的项目级 `agent-artifacts/` 目录。
+4. 分别建模工作树与执行：工作树是操作位置，执行是一次有记录的活动。
+5. 每次执行必须分配唯一且固定的目录；禁止用重试覆盖先前执行。
+6. 每次已完成执行必须通过 `manifest.json` 绑定精确 Git commit。
+7. 禁止并行 Agent 写入同一个汇总文件；必须指定唯一汇总者。
+8. 必须保留失败和被拒绝的工作，以及相关证据和决策理由。
+9. 工作树可清理，产物必须持久保留。
+10. 代码状态和必需证据可恢复之前，禁止删除工作树。
+11. 每个项目或专题协调范围必须恰有一名活跃编排者。
+12. 每个被派发的执行者必须获得不可变的 `assignment.json`，明确路径、commit、权限、输入和必需输出。
+13. 必须通过仓库本地 excludes 文件让 Git 忽略 `.agent-artifacts`；禁止为此修改全局 Git 配置。
+
+## 概念模型
+
+不需要专题的独立昇腾算子任务使用：
 
 ```text
-Task
-├── Worktree
-│   └── Branch
-│       └── Commit
-└── Run
+任务
+├── 工作树
+│   └── 分支
+│       └── commit
+└── 执行
     ├── manifest.json
     ├── report.md
     ├── tests/
@@ -58,70 +77,70 @@ Task
     └── patches/
 ```
 
-For iterative Ascend operator engineering, use this hierarchy:
+迭代型昇腾算子工程使用：
 
 ```text
-Project
-└── Campaign
-    ├── Reference
-    ├── Baseline, when applicable
-    └── Variant
-        └── Run
-            └── Artifact
+项目
+└── 专题
+    ├── 参考资料
+    ├── 基线（适用时）
+    └── 方案
+        └── 执行
+            └── 产物
 ```
 
-Each level answers a different question:
+各层分别回答：
 
-| Level | Required meaning |
+| 层次 | 必须表达的含义 |
 |---|---|
-| Project | What Ascend operator system or repository are we developing? |
-| Campaign | What Ascend operator outcome, target, and constraints are being pursued? |
-| Variant | Which concrete design, implementation, porting, or optimization hypothesis is being tested? |
-| Run | Which specific agent, test, profile, or benchmark execution occurred? |
-| Artifact | What raw or derived evidence did that execution produce? |
+| 项目 | 正在开发哪个昇腾算子系统或仓库？ |
+| 专题 | 要实现什么昇腾算子目标，受哪些条件约束？ |
+| 方案 | 正在验证哪一个具体设计、实现、移植或优化假设？ |
+| 执行 | 具体进行了哪一次实现、测试、性能分析或基准测试？ |
+| 产物 | 这次执行产生了哪些原始或派生证据？ |
 
-A Variant is one concrete hypothesis or implementation approach, not a Worker or an execution. A Run is one execution of that approach: implementation, test, benchmark, review, or audit. A Variant can have many Runs, each with its own assignment and exact commits. Allocate Variant IDs once across the Campaign; never reuse them. There is no Round identity, directory, or lifecycle in new campaigns. Record comparisons and milestones in summaries without grouping ownership into rounds.
+方案表示一个具体假设或实现方式，不表示执行者或某次执行。执行表示对该方案开展的一次实现、测试、基准测试、审查或审计。一个方案可以包含多次执行，每次都有自己的合约和精确 commit。方案 ID 在整个专题内统一分配，禁止复用。新专题不再使用轮次（Round）的身份、目录或生命周期；比较和里程碑写入汇总，不通过轮次划分所有权。
 
-The execution control flow is:
+执行控制流程：
 
 ```text
-Coordinator
-    -> Assignment Envelope
-    -> Worktree + Run
-    -> Worker
-    -> Completion Evidence
-    -> Coordinator Validation
-    -> Next Role or State Transition
+编排者
+    -> 任务合约
+    -> 工作树 + 执行
+    -> 执行者
+    -> 完成证据
+    -> 编排者验收
+    -> 下一角色或状态转换
 ```
 
-## Project Layout
+## 项目布局
 
-Prefer a project container whose Git worktrees and durable artifacts are siblings:
+建议将工作树与持久产物放在同一项目容器目录下，互为同级目录：
 
 ```text
 <project-container>/
-├── <primary-worktree-name>/       # existing primary worktree; name is discovered
-├── worktrees/                    # disposable worktrees
+├── <primary-worktree-name>/       # 现有主工作树；实际名称通过发现获得
+├── worktrees/                    # 可清理的工作树
 │   ├── codex-layernorm-tiling/
 │   ├── claude-aicore-review/
 │   └── matmul-ascend910b-v002/
-└── agent-artifacts/              # durable, shared, outside worktrees
-    ├── runs/                     # non-campaign runs
-    └── campaigns/                # operator engineering campaigns
+└── agent-artifacts/              # 持久、共享，位于工作树之外
+    ├── runs/                     # 非专题执行
+    └── campaigns/                # 算子工程专题
 ```
 
-Only `campaigns/` and standalone `runs/` are default top-level artifact directories. Create directories on demand rather than empty scaffolding. Project-level `summary/` and `registry/` are optional extensions when aggregation or coordination needs them.
+默认顶层产物目录只有 `campaigns/` 和独立任务的 `runs/`。按需创建目录，禁止预先生成空目录骨架。需要项目级汇总或协调时，`summary/` 和 `registry/` 是可选扩展。
 
-If the existing repository layout differs, preserve it and identify equivalent absolute paths. Never assume that the directory above the repository is writable or safe to modify; inspect first.
+现有仓库布局不同时，保留原布局并确定对应的绝对路径。禁止假定仓库上级目录可写或可安全修改，必须先检查。
 
-### Primary Worktree Discovery
+### 发现主工作树
 
-The primary worktree may have any directory name. Never require a directory named `repo`, rename an existing checkout to match an example, or infer its path from a branch name or remote URL.
+主工作树可以使用任意目录名。禁止要求目录必须叫 `repo`、为匹配示例而重命名现有检出目录，或从分支名和远程 URL 推导路径。
 
-Before dispatch, the Coordinator must discover the actual paths:
+派发前，编排者必须确定实际路径：
 
-1. Start from the user-provided repository or worktree path, or the current directory when it is inside the intended repository. If starting from a project container, inspect its existing layout to locate the intended checkout. If multiple repositories are plausible, ask the user which one to use.
-2. Use Git metadata rather than directory names:
+1. 从用户提供的仓库或工作树路径开始；当前目录位于目标仓库内时，也可从当前目录开始。若从项目容器启动，先检查现有布局并定位目标检出目录。存在多个可能的仓库时，向用户确认。
+2. 使用 Git 元数据识别，不依赖目录名称：
 
 ```bash
 git -C "<existing-worktree-path>" rev-parse --show-toplevel
@@ -129,73 +148,73 @@ git -C "<existing-worktree-path>" worktree list --porcelain
 git -C "<existing-worktree-path>" rev-parse --path-format=absolute --git-common-dir
 ```
 
-3. Identify the primary worktree from the main worktree entry in Git's worktree inventory, cross-checking its shared Git metadata. The current checkout may be a linked worktree, and the primary worktree need not use a branch named `main`. Do not treat the common Git directory itself as a code worktree. A bare repository has no primary code worktree; record its actual repository path and use dedicated code worktrees.
-4. Record the discovered absolute repository path in `project.repository` and the assigned execution worktree path in `project.worktree`. Resolve the project container, worktree storage root, and external artifact root independently from the existing layout. Do not construct any of these paths by appending a fixed `repo` directory name.
-5. Preserve existing directory names. If the target repository cannot be identified safely, stop dispatch and request its path instead of creating or assuming a `repo` directory.
+3. 从 Git 工作树清单中的主工作树条目识别主工作树，并核对共享 Git 元数据。当前目录可能是关联工作树，主工作树也不一定使用 `main` 分支。禁止将公共 Git 元数据目录当作代码工作树。裸仓库没有主代码工作树，必须记录其实际仓库路径并使用专用代码工作树。
+4. 将发现的仓库绝对路径写入 `project.repository`，将分配的执行工作树路径写入 `project.worktree`。根据现有布局分别确定项目容器、工作树存放根目录和外部产物根目录，禁止通过拼接固定的 `repo` 目录名构造这些路径。
+5. 保留已有目录名。无法安全识别目标仓库时，停止派发并请求其路径，禁止自行创建或假定存在 `repo` 目录。
 
-Do not put the shared `agent-artifacts/` store inside a disposable worktree. Do not commit raw execution artifacts unless the user explicitly requests it.
+禁止将共享 `agent-artifacts/` 存储放入可清理工作树。除非用户明确要求，否则禁止提交原始执行产物到 Git。
 
-## Agent Startup Directory
+## Agent 启动目录
 
-Start agents according to role:
+按角色选择启动位置：
 
-| Role | Startup location |
+| 角色 | 启动位置 |
 |---|---|
-| Coordinator or orchestrator | Project container root; no code worktree |
-| Ascend operator coder, bug fixer, refactorer | Assigned branch worktree root |
-| Ascend operator implementation agent | Assigned variant worktree root |
-| Tester | Detached worktree at the exact target commit |
-| Reviewer or auditor | Detached read-only worktree, or dedicated review worktree |
-| Integrator | Dedicated integration worktree |
-| Planner or researcher | Primary repository only when guaranteed read-only |
-| Artifact aggregator | Project-level `agent-artifacts/` context; no code worktree required |
+| 编排者 | 项目容器根目录；无需代码工作树 |
+| 昇腾算子编码、修复、重构执行者 | 分配的分支工作树根目录 |
+| 昇腾算子实现执行者 | 分配的方案工作树根目录 |
+| 测试者 | 固定在精确目标 commit 的 detached 工作树 |
+| 审查者或审计者 | detached 只读工作树，或专用审查工作树 |
+| 集成者 | 专用集成工作树 |
+| 规划者或研究者 | 仅在保证只读时使用主仓库 |
+| 产物汇总者 | 项目级 `agent-artifacts/` 上下文；无需代码工作树 |
 
-At startup, verify all of the following before modifying code:
+启动时，修改代码前必须核实：
 
 ```text
-current directory == assigned worktree root
-current branch or detached commit == assignment
-Git worktree root == assignment project.worktree
-shared Git repository == assignment project.repository
-artifact link == assignment artifacts.root_directory (the stable project artifact root)
-run directory == assignment artifacts.run_directory
-no other active agent owns this worktree
+当前目录 == 分配的工作树根目录
+当前分支或 detached commit == 合约要求
+Git 工作树根目录 == project.worktree
+共享 Git 仓库 == project.repository
+产物链接目标 == artifacts.root_directory（固定的项目产物根目录）
+执行目录 == artifacts.run_directory
+没有其他活跃 Agent 占用该工作树
 ```
 
-Read all applicable `AGENTS.md`, `CLAUDE.md`, repository instructions, and user constraints before editing.
+编辑前必须读取适用的 `AGENTS.md`、`CLAUDE.md`、仓库说明和用户约束。
 
-Never launch a code-writing agent from the project container directory because it is not a worktree. Avoid launching it from the primary worktree when parallel agents are active.
+禁止从项目容器目录启动代码写入 Agent，因为它不是工作树。存在并行 Agent 时，建议避免从主工作树启动代码写入 Agent。
 
-## Coordinator Role
+## 编排者职责
 
-Use a Coordinator whenever qualifying Ascend operator work spans multiple agents, worktrees, runs, variants, or lifecycle stages. A human or deterministic program may fulfill this role, but when an Agent fulfills it, start that Agent at the project container root.
+符合适用范围的昇腾算子任务跨越多个 Agent、工作树、执行、方案或生命周期阶段时，必须设置编排者。人工或确定性程序均可承担此角色；若由 Agent 承担，则从项目容器根目录启动。
 
-The Coordinator owns workflow control, not implementation. It must:
+编排者负责流程控制，不负责实现。必须执行：
 
-- Discover the actual primary repository and assigned worktree paths without requiring fixed directory names; inspect repository instructions, active worktrees, dirty state, campaign state, and current summaries before dispatch.
-- Allocate collision-free task, campaign, variant, worktree, branch, and run identities.
-- Resolve and record exact base commits before creating worktrees.
-- Create Worker run directories, immutable assignment envelopes, initial manifests, and `.agent-artifacts` context links.
-- Maintain the repository-local Git exclude rule for `.agent-artifacts` without modifying global Git configuration or committed ignore files.
-- Dispatch Workers with explicit roles and stable assignment paths.
-- Monitor state through manifests and reports rather than inferring progress from processes or directory names.
-- Validate terminal outputs before starting audit, integration, aggregation, retry, or cleanup.
-- Preserve provenance when a run fails, is cancelled, or is superseded.
+- 发现真实的主仓库与分配工作树路径，不要求固定目录名；派发前检查仓库说明、活跃工作树、未提交状态、专题状态和当前汇总。
+- 为任务、专题、方案、工作树、分支和执行分配无冲突的身份。
+- 创建工作树前解析并记录精确基准 commit。
+- 创建执行者的执行目录、不可变合约、初始 manifest 和 `.agent-artifacts` 上下文链接。
+- 维护仓库本地的 `.agent-artifacts` Git 忽略规则，禁止修改全局 Git 配置或已提交的忽略文件。
+- 派发时提供明确角色和固定合约路径。
+- 通过 manifest 和报告监控状态，禁止仅根据进程或目录名推断进度。
+- 在开始审计、集成、汇总、重试或清理前，验证终态输出。
+- 执行失败、取消或被替代时，保留其来源与历史。
 
-The Coordinator must not:
+编排者禁止：
 
-- Modify business source code in the project container or primary worktree.
-- Reuse one writable worktree for concurrent Workers.
-- Rewrite a Worker's assignment after dispatch.
-- Audit its own implementation result or silently approve incomplete evidence.
-- Merge, delete branches, remove worktrees, or update shared summaries unless that authority is explicitly part of the assignment.
-- Place secrets or credentials in prompts, assignments, manifests, or artifacts.
+- 在项目容器或主工作树中修改业务源码。
+- 让并发执行者复用同一个可写工作树。
+- 派发后重写执行者的合约。
+- 审计自己的实现结果，或默许证据不完整的结果通过。
+- 在合约未明确授权时合并、删除分支、移除工作树或更新共享汇总。
+- 在提示词、合约、manifest 或产物中放入秘密信息或凭据。
 
-Allow only one active Coordinator writer for a project or campaign scope. Record ownership in `agent-artifacts/registry/coordinator.json` or an equivalent atomic lease. A second Coordinator may operate only on a disjoint scope or after an explicit ownership transfer.
+每个项目或专题协调范围只允许一名活跃编排者写入。所有权记录在 `agent-artifacts/registry/coordinator.json` 或等效的原子租约中。第二名编排者只有在负责不相交的范围，或完成明确的所有权交接后，才能操作。
 
-The Coordinator should have its own run under `agent-artifacts/runs/` with `agent.role` set to `coordinator`. Its report records dispatches, validations, state transitions, unresolved blockers, and the final handoff. Coordinator runs do not require a code worktree.
+建议编排者在 `agent-artifacts/runs/` 下保留自己的执行记录，将 `agent.role` 设为 `coordinator`。报告记录派发、验收、状态转换、未解决的阻塞项和最终交接。编排者执行不要求代码工作树。
 
-Coordinator lifecycle:
+编排者生命周期：
 
 ```text
 initialized -> planning -> dispatching -> monitoring -> validating
@@ -204,9 +223,9 @@ initialized -> planning -> dispatching -> monitoring -> validating
                                       └-> closing -> completed -> archived
 ```
 
-## Git Worktree Protocol
+## Git 工作树协议
 
-Create a new branch and worktree from an explicit base branch or commit:
+从明确的基准分支或 commit 创建新分支和工作树：
 
 ```bash
 git -C "<primary-repository-absolute-path>" worktree add \
@@ -215,7 +234,7 @@ git -C "<primary-repository-absolute-path>" worktree add \
   <base-ref>
 ```
 
-For an Ascend operator campaign variant, choose a branch prefix that matches the work:
+专题方案使用与工作类型匹配的分支前缀：
 
 ```bash
 git -C "<primary-repository-absolute-path>" worktree add \
@@ -224,7 +243,7 @@ git -C "<primary-repository-absolute-path>" worktree add \
   <base-commit>
 ```
 
-For immutable review or testing:
+针对固定代码状态进行审查或测试时：
 
 ```bash
 git -C "<primary-repository-absolute-path>" worktree add --detach \
@@ -232,87 +251,112 @@ git -C "<primary-repository-absolute-path>" worktree add --detach \
   <target-commit>
 ```
 
-Follow these safeguards:
+必须遵守以下防护要求：
 
-- Resolve `<base-ref>` or `<target-commit>` before creating the worktree.
-- Do not force the same branch into multiple worktrees.
-- Never share one writable worktree between concurrent agents.
-- Never change another agent's branch, worktree, files, or in-progress state.
-- Do not merge automatically unless the assigned role includes integration.
-- Record the base commit before implementation and the result commit after completion.
-- If work must be retried, create a new run; reuse the worktree only when ownership is unchanged and doing so is explicit.
+- 创建工作树前解析 `<base-ref>` 或 `<target-commit>`。
+- 禁止强制将同一分支检出到多个工作树。
+- 禁止并发 Agent 共享同一个可写工作树。
+- 禁止改变其他 Agent 的分支、工作树、文件或进行中的状态。
+- 除非分配角色包含集成职责，否则禁止自动合并。
+- 实现前记录基准 commit，完成后记录结果 commit。
+- 重试必须创建新执行；只有所有权未变且明确允许时，才复用工作树。
 
-## Worktree and Run Separation
+## 工作树与执行分离
 
-Keep the identities independent:
-
-```text
-worktree_id = where code is checked out
-run_id      = one execution and its evidence
-```
-
-One worktree may host multiple sequential runs. One variant may use several worktrees over time. A reviewer run may inspect a coder's result commit from a different worktree.
-
-Never name a run only after a worktree. Record explicit links in `manifest.json`:
+身份必须相互独立：
 
 ```text
-run -> worktree path
-run -> branch
-run -> base commit
-run -> result commit
-run -> campaign/variant, when applicable
+worktree_id = 代码检出位置
+run_id      = 一次执行及其证据
 ```
 
-Worktree lifecycle:
+一个工作树可以承载多次顺序执行。一个方案可以在不同时期使用多个工作树。审查执行可以从另一个工作树检查实现者的结果 commit。
+
+禁止仅用工作树名称标识执行。必须在 `manifest.json` 中明确记录关联：
+
+```text
+执行 -> 工作树路径
+执行 -> 分支
+执行 -> 基准 commit
+执行 -> 结果 commit
+执行 -> 专题/方案（适用时）
+```
+
+工作树生命周期：
 
 ```text
 created -> active -> completed -> merged -> removed
                          └------> abandoned -> removed
 ```
 
-Run execution status is `pending`, `running`, `completed`, `failed`, or `cancelled`. Execution status is separate from Coordinator validation, the test/audit verdict, and Variant decisions; see Status Machines. Archival and supersession are recorded externally and do not overwrite the terminal manifest.
+执行状态为 `pending`、`running`、`completed`、`failed` 或 `cancelled`。执行状态与编排者验收、测试/审计结论、方案决策相互独立，详见“状态机”。归档和替代关系记录在外部，禁止覆盖终态 manifest。
 
-A run usually outlives its worktree.
+执行记录通常比其工作树保留得更久。
 
-## Durable Artifact Access
+## 持久产物访问
 
-Create the project artifact root and the exact assigned run directory before dispatch. Every worktree uses the same stable context mapping:
+派发前必须创建项目产物根目录和准确的执行目录。每个工作树均使用相同的固定上下文映射：
 
 ```text
 <worktree>/.agent-artifacts -> <project-container>/agent-artifacts/
 ```
 
-Never point this link at a Campaign, Variant, or Run, and never retarget it when a task changes. Workers can read the campaign index, reference, baseline, other variants, and historical evidence through this root. Read access does not grant ownership of those files.
+禁止将此链接指向某个专题、方案或执行，也禁止在任务切换时重定向。执行者可通过根目录读取专题索引、参考资料、基线、其他方案及历史证据。读取权限不代表拥有这些文件的写入权。
 
-The immutable assignment declares `artifacts.root_directory`, the root-relative `artifacts.run_path`, and the absolute `artifacts.run_directory`. These must identify the same location. Pass the absolute run directory to every child process that produces durable evidence; never derive output paths from cwd, a `latest` link, or a mutable "current task" pointer.
+不可变合约声明项目产物根目录 `artifacts.root_directory`、相对该根目录的 `artifacts.run_path` 和绝对执行目录 `artifacts.run_directory`。必须满足 `artifacts.root_directory / artifacts.run_path == artifacts.run_directory`；根目录本身不等于执行目录。必须将绝对执行目录传给每个产出持久证据的子进程；禁止根据 cwd、`latest` 链接或可变的“当前任务”指针推导输出位置。
 
-When symlinks are unavailable, set `artifacts.entrypoint` to `null` and use the absolute paths directly. An artifact-only Worker may also omit the link and worktree. Verify real paths before writing; never replace a real user directory with a symlink.
+无法使用符号链接时，将 `artifacts.entrypoint` 设为 `null` 并直接使用绝对路径。仅处理产物的执行者也可不使用链接和工作树。写入前必须验证真实路径；禁止用符号链接替换真实的用户目录。
 
-Workers remain free to use shell commands, build tools, profilers, temporary scripts, and intermediate files inside their assigned worktree or permitted scratch space. The contract governs durable deliverables, not every temporary file. Before submission, collect all evidence supporting claims into the assigned run directory, recording source and destination when copying tool output. Persistent campaign documents outside the run require explicit ownership in `permissions.additional_writable_paths`.
+执行者可在分配的工作树或获准的临时空间内自由使用 shell、构建工具、profiler、临时脚本和中间文件。合约约束持久交付物，不约束每个临时文件。提交前必须将支持结论的全部证据收集到分配的执行目录；复制工具输出时记录源位置和目标位置。执行目录之外的持久专题文档必须通过 `permissions.additional_writable_paths` 明确写入所有权。
 
-Do not archive a run, reuse its worktree, or switch startup pointers until the Worker and all producing child processes have stopped. The stable link alone does not make concurrent source edits safe.
+执行者和所有产出文件的子进程停止前，禁止归档执行、复用工作树或切换启动指针。固定链接本身不能保证并发源码修改安全。
 
-Canonical paths for new executions:
+新执行的标准路径：
 
 ```text
-standalone:      agent-artifacts/runs/<run-id>/
-campaign-wide:  agent-artifacts/campaigns/<campaign>/runs/<run-id>/
-variant:        agent-artifacts/campaigns/<campaign>/variants/VNNN/runs/<run-id>/
+独立任务：  agent-artifacts/runs/<run-id>/
+专题级：    agent-artifacts/campaigns/<campaign>/runs/<run-id>/
+方案级：    agent-artifacts/campaigns/<campaign>/variants/VNNN/runs/<run-id>/
 ```
 
-Campaign-wide runs are for work without a particular Variant, such as aggregation or reference preparation. Every implementation, test, or audit of a particular Variant belongs under that Variant. Each run has one canonical location; indexes only reference it.
+专题级执行用于不归属某个具体方案的任务，例如汇总或准备参考资料。对具体方案开展的实现、测试和审计必须归入该方案。每次执行只有一个标准存储位置，索引只保存引用。
 
-### Git Ignore Hygiene
+### 合约字段与实际目录名称
 
-Before creating `.agent-artifacts`, the Coordinator must ensure Git ignores this exact root-level pattern:
+中文仅用于说明。目录和文件名称属于协议接口，必须保持原拼写、单复数及大小写；禁止将 `campaigns`、`variants`、`runs` 等翻译成中文路径，或改成 `campaign`、`variant`、`run`。新方案目录使用 `V001` 这类大写 ID，禁止改为分支名中的小写 `v001` 或追加方案描述；描述保存在 `name`。
+
+下表中的 `/` 表示路径拼接，不是必须照抄的文本。实际值由编排者填写，禁止将字段名或示例占位符作为文件夹名：
+
+| 合约字段或引用 | 对应位置与命名规则 |
+|---|---|
+| `project.repository` | 从 Git 元数据发现的主工作树或裸仓库绝对路径，不要求目录名为 `repo` |
+| `project.worktree` | 分配的代码工作树绝对路径；仅处理产物的汇总角色可为 `null` |
+| `artifacts.root_directory` | 项目产物根目录的实际绝对路径；默认名称为 `agent-artifacts` |
+| `artifacts.entrypoint` | 工作树根目录的 `.agent-artifacts` 链接，目标为 `artifacts.root_directory`；无链接时为 `null` |
+| `scope.campaign_directory` | `artifacts.root_directory / campaigns / scope.campaign_id`；非专题任务为 `null` |
+| `scope.variant_directory` | `scope.campaign_directory / variants / scope.variant_id`；无具体方案时为 `null` |
+| `artifacts.run_directory` | 方案级为 `scope.variant_directory / runs / artifacts.run_id`；专题级为 `scope.campaign_directory / runs / artifacts.run_id`；独立任务为 `artifacts.root_directory / runs / artifacts.run_id` |
+| `artifacts.run_path` | 上述执行目录相对于项目产物根目录的路径；方案任务包含完整的 `campaigns/.../variants/VNNN/runs/...` 前缀 |
+| `startup.assignment_file` | `artifacts.run_directory / assignment.json` |
+| `startup.bootstrap_file` | `artifacts.run_directory / worker-start.md` |
+| `startup.protocol_file` | `artifacts.run_directory / protocol / SKILL.md` |
+| `required_outputs`、执行 manifest 的 `artifacts` 和 `result.evidence` | 相对此次执行目录，不相对于工作树、专题目录或项目产物根目录 |
+| `inputs`、`reviewed_runs[].manifest_file` | 绝对文件路径，不根据当前目录推导 |
+| 方案 manifest 的 `runs` | 相对于该方案目录的执行 manifest 路径，例如 `runs/test-01/manifest.json`；历史执行可使用绝对路径 |
+
+专题资料目录保留 `reference/`、`baseline/`、`variants/`、`runs/`、`summary/` 名称；执行内部保留 `protocol/`、`logs/`、`tests/`、`benchmarks/`、`patches/`、`profiling/`、`attachments/`、`environment/` 名称。各目录仍按需创建。`protocol/` 内冻结的是 `SKILL.md`、`templates/`、`schemas/` 和 `scripts/`；禁止将协议模板目录与运行产物目录混为一谈。
+
+### Git 忽略规则
+
+创建 `.agent-artifacts` 前，编排者必须确保 Git 忽略以下准确的根目录模式：
 
 ```gitignore
 /.agent-artifacts
 ```
 
-Do not add a trailing slash: the worktree entrypoint is normally a symlink, and a directory-only pattern may not ignore it.
+禁止添加尾部斜杠：工作树入口通常是符号链接，仅针对目录的模式可能无法忽略它。
 
-The Coordinator performs this directly through the repository-local excludes file. Preserve its existing contents and append the pattern only when absent:
+编排者直接维护仓库本地 excludes 文件。保留现有内容，仅在模式缺失时追加：
 
 ```bash
 exclude_file="$(git rev-parse --path-format=absolute --git-path info/exclude)"
@@ -322,21 +366,21 @@ grep -qxF '/.agent-artifacts' "$exclude_file" ||
   printf '%s\n' '/.agent-artifacts' >> "$exclude_file"
 ```
 
-This is local operational Git metadata: it is not committed and does not affect unrelated repositories. Do not use `git config --global`, modify a global excludes file, or add this entrypoint to the repository's committed `.gitignore` for this purpose.
+这是仓库本地的操作元数据，不提交到 Git，也不影响其他仓库。禁止为此使用 `git config --global`、修改全局 excludes 文件，或修改仓库已提交的 `.gitignore`。
 
-After creating the symlink, verify it from the worktree root:
+创建符号链接后，从工作树根目录验证：
 
 ```bash
 git check-ignore -v .agent-artifacts
 ```
 
-If `.agent-artifacts` is already tracked, stop and report it. Do not remove it from the index or rewrite repository history without explicit authorization.
+若 `.agent-artifacts` 已被 Git 跟踪，必须停止并报告。未经明确授权，禁止从索引移除它或重写仓库历史。
 
-## Assignment Envelope Protocol
+## 任务合约协议
 
-The Coordinator creates `assignment.json` in the exact run directory before dispatch. The assignment is the authoritative task contract. Use `templates/assignment.json`, populate every placeholder, and validate with `scripts/validate_contract.py`. Version 2.0 deliberately rejects the previous layout; historical assignments keep their own frozen schema.
+编排者必须在派发前，于准确的执行目录中创建 `assignment.json`。合约是任务的权威依据。使用 `templates/assignment.json`，填写全部占位符，并通过 `scripts/validate_contract.py` 校验。2.0 版本有意不兼容旧布局；历史合约继续使用各自冻结的 schema。
 
-Example (the repeated `a` SHA is illustrative; resolve a real full commit before dispatch):
+示例中的重复 `a` SHA 仅用于展示，派发前必须解析真实的完整 commit：
 
 ```json
 {
@@ -410,84 +454,84 @@ Example (the repeated `a` SHA is illustrative; resolve a real full commit before
 }
 ```
 
-Assignment rules:
+合约规则：
 
-- Use normalized absolute host-local paths for all directories, startup files, `inputs`, and `reviewed_runs[].manifest_file`. The current implementation supports POSIX paths used on Linux and macOS. Resolve remote execution paths explicitly before dispatch.
-- Discover `project.repository` from Git metadata. For code roles, `project.worktree` and `startup.working_directory` identify the assigned checkout; for artifact-only aggregation they may be the artifact root with `worktree: null`.
-- `scope` records campaign and variant IDs plus their exact directories. Standalone tasks set all scope fields to `null`; campaign-wide tasks set the variant fields to `null`.
-- `artifacts.entrypoint` is `.agent-artifacts` or `null`. Its target, when present, is always `artifacts.root_directory`. `run_path` is relative to that project root, not to the Campaign or Variant.
-- All `required_outputs` are paths relative to this run. Do not use `..`, absolute output paths, or escaped symlinks to represent outputs owned elsewhere.
-- `inputs` lists files the Worker must read, with campaign README/index, reference/acceptance files, current summary, applicable baseline, and Variant plan/preceding conclusions as appropriate to the role. The Coordinator makes them available before dispatch. Snapshot/version acceptance inputs when they could change during execution; do not silently change the assigned criteria.
-- `reviewed_runs` pins each reviewed terminal manifest by absolute path, run ID, and SHA-256. Audit assignments list the test/benchmark runs whose claims they assess. A code-only review may have an empty list if its scope says so; it cannot claim to audit measurements it did not inspect.
-- `git.base_commit` is the exact starting commit. Test, benchmark, review, and audit roles also require `git.target_commit`; their checkout starts at that target, which may differ from the implementation's original base. Only integration grants `merge`; read-only checking roles cannot modify implementation.
-- `permissions.additional_writable_paths` lists exact additional campaign documents owned by this Worker. Read access to the full Campaign remains available. Tools and temporary experiments are not restricted by a command allowlist.
-- `supersedes` is the absolute path to the prior run's manifest, or `null`. Never back-write a replacement pointer into an archived run.
-- Freeze the assignment, startup file, and protocol snapshot after dispatch. Corrections require a new assignment and run; never reinterpret an old execution under a revised contract.
-- Never include secrets or unredacted environment values.
+- 所有目录、启动文件、`inputs` 和 `reviewed_runs[].manifest_file` 必须使用规范化的本机绝对路径。当前实现支持 Linux 和 macOS 的 POSIX 路径。远程执行路径必须在派发前明确解析。
+- 从 Git 元数据发现 `project.repository`。代码角色的 `project.worktree` 和 `startup.working_directory` 指向分配的检出目录；仅处理产物的汇总角色可将工作目录设为产物根目录，并使用 `worktree: null`。
+- `scope` 记录专题与方案 ID 及其准确目录。独立任务将全部 scope 字段设为 `null`；专题级任务将方案字段设为 `null`。
+- `artifacts.entrypoint` 为 `.agent-artifacts` 或 `null`。存在入口时，其目标始终为 `artifacts.root_directory`。`run_path` 相对于该项目产物根目录，不相对于专题或方案。
+- `required_outputs` 全部使用相对此次执行目录的路径。禁止使用 `..`、绝对输出路径或越界符号链接来表示其他位置的产物。
+- `inputs` 列出执行者必须读取的文件，按角色纳入专题 README/索引、参考与验收文件、当前汇总、适用基线，以及方案计划和前序结论。编排者必须在派发前准备好这些文件。执行期间可能变化的验收输入必须保存快照或版本，禁止无记录地改变已分配的标准。
+- `reviewed_runs` 通过绝对路径、执行 ID 和 SHA-256 固定每个被审查的终态 manifest。审计合约必须列出其评估的测试/基准测试执行。仅审查代码的任务可在范围明确时使用空列表，但禁止声称已审计未检查的测量结果。
+- `git.base_commit` 是精确起点。测试、基准测试、审查和审计角色还必须提供 `git.target_commit`；检出从此目标开始，它可以不同于实现最初的基准 commit。只有集成角色可获得 `merge` 权限；只读检查角色禁止修改实现。
+- `permissions.additional_writable_paths` 列出本执行者额外拥有的专题文档的准确路径。完整专题仍可读取。禁止通过命令白名单限制工具选择和临时实验方式。
+- `supersedes` 为被替代执行的 manifest 绝对路径，或 `null`。禁止向已归档执行回写替代指针。
+- 派发后冻结合约、启动文件和协议快照。修正必须创建新合约和新执行；禁止用修订后的合约重新解释旧执行。
+- 禁止包含秘密信息或未经脱敏的环境变量值。
 
-### Worker Skill Bootstrap
+### 执行者启动引导
 
-A new Agent does not inherit the Coordinator's loaded skills or conversation. Before dispatch, the Coordinator must:
+新 Agent 不会继承编排者已加载的 Skill 或对话。派发前，编排者必须：
 
-1. Copy the current `SKILL.md`, `templates/`, `schemas/`, and `scripts/` into `<run_directory>/protocol/`. Freeze this run-local snapshot; omit Git metadata, credentials, and unrelated files.
-2. Render `templates/worker-start.md` as `startup.bootstrap_file`. Substitute every placeholder using the assignment: absolute contract/protocol/worktree/artifact paths, campaign/variant context, link mapping, required reading, and concrete output destinations. Use `not applicable` for absent campaign/variant/worktree/link fields. This is a view of the contract, not another source of authority.
-3. Put the read-first requirement in the launch prompt, not only inside the file the Worker has yet to read:
-
-```text
-First read <absolute-assignment-file>, then <absolute-bootstrap-file>.
-Before task commands or file changes, read the required instructions and inputs,
-verify the directory/link mapping, and report the assignment ID, Campaign,
-Variant, Run, and exact output destinations. Do not guess replacement paths.
-```
-
-4. Start the Worker in `startup.working_directory`. For manual startup, supply that exact directory and the same initial prompt. Environment variables are optional convenience only: `AGENT_ASSIGNMENT`, `AGENT_ARTIFACT_ROOT`, and `AGENT_RUN_DIR` must contain the assigned absolute paths.
-5. Read the Worker's startup acknowledgement and check it against the assignment before accepting its implementation handoff. File reads and read-only preflight probes are allowed during startup; source edits and experiments wait until preflight passes.
-
-Native skill discovery may supplement but never replace this explicit prompt. Preserve existing repository instructions; do not overwrite instruction files or global Agent settings. For reused worktrees, stop old producers first, retain the stable artifact-root link, and pass a new exact assignment path. Never find assignments by scanning for the newest run.
-
-### Worker Preflight Handshake
-
-The Worker first reads the assignment, bootstrap, frozen protocol, applicable repository instructions, and the required `inputs`. It must understand:
-
-- Campaign: the shared Ascend operator goal, reference, baseline, and acceptance constraints.
-- Variant (`V`): a concrete approach/hypothesis within that Campaign; IDs are campaign-wide and do not denote agents or executions.
-- Run: this single assigned execution with its own role, commits, and durable evidence.
-- Other Variants and their prior failures are readable context; their files are not writable without ownership.
-
-Then verify and acknowledge actual values, not merely "I have read the protocol":
-
-- Assignment ID, role, campaign/variant/run IDs, and the resolved assignment and protocol paths.
-- Working directory, worktree root, shared Git repository identity, and branch/base or detached target commit. For artifact-only aggregation, record the worktree/Git checkout checks as `not_applicable` with a reason.
-- Absolute artifact root, campaign directory, variant directory, run directory, and every required output destination.
-- Actual `.agent-artifacts` link and its resolved project root, or the declared absolute-path fallback when `entrypoint` is `null`.
-- Required inputs are readable, declared external destinations are writable, and no other active Worker owns the worktree.
-
-Record these observations in `manifest.preflight` with `status`, timestamp, and resolved paths. Only then change `pending` to `running`. On mismatch, record failure using a verified run path and stop before source changes; if even that destination is untrusted, report to the Coordinator without writing through the suspect link.
-
-### Ownership and Completion Handshake
+1. 将当前 `SKILL.md`、`templates/`、`schemas/` 和 `scripts/` 复制到 `<run_directory>/protocol/`，并冻结此次执行的协议快照。禁止复制 Git 元数据、凭据和无关文件。
+2. 将 `templates/worker-start.md` 渲染到 `startup.bootstrap_file`。根据合约替换全部占位符，包括合约/协议/工作树/产物的绝对路径、专题与方案信息、链接映射、必读文件和具体输出位置。不存在的专题、方案、工作树或链接字段用 `not applicable` 表示。启动引导是合约的展示，不是另一份权威来源。
+3. 将“首先读取合约”的要求写入启动提示词，禁止只放在执行者尚未读取的文件中：
 
 ```text
-Coordinator creates frozen contract/bootstrap/protocol and pending manifest
-    -> Worker reads, verifies, acknowledges, and owns active execution files
-    -> Worker explores freely within assigned source/ownership boundaries
-    -> Worker collects durable outputs, stops producers, and submits terminal files
-    -> Coordinator checks actual files and writes validation.json
-    -> Campaign decision owner considers verified tests/audits and accepts or rejects
+首先读取 <absolute-assignment-file>，再读取 <absolute-bootstrap-file>。
+执行任务命令或修改文件前，阅读必需说明和输入，核实目录与链接映射，
+回报合约 ID、专题、方案、执行身份，以及全部产物的准确目标路径。
+禁止猜测替代路径。
 ```
 
-The Worker may use scratch output during exploration. Before submission it must collect durable evidence, record the exact result commit, report unexecuted verification and missing outputs, and set execution status to `completed`, `failed`, or `cancelled`. `completed` means the assigned execution finished, not that tests passed or the Variant is accepted. The Worker cannot mark its own Coordinator validation passed. Only execution evidence is frozen at submission; the Coordinator subsequently adds its owned `validation.json` or termination record without altering Worker files.
+4. 在 `startup.working_directory` 启动执行者。人工启动时提供准确目录和同样的首条指令。环境变量仅为可选辅助；使用时，`AGENT_ASSIGNMENT`、`AGENT_ARTIFACT_ROOT` 和 `AGENT_RUN_DIR` 必须填入合约给定的绝对路径。
+5. 阅读执行者的启动确认，并在接受实现交接前与合约核对。启动期间允许读取文件和只读检查；源码编辑与实验必须等启动前检查通过后再开始。
 
-`validation.json` starts as `pending`. The Coordinator checks assignment identity, startup acknowledgement, ownership, actual output paths/files, evidence-to-commit provenance, manifest/report consistency, and stopped producers. Each check becomes `passed`, `failed`, or `not_applicable` with an explanation for exemptions. Overall status is `passed` only after every required check passes; otherwise it is `needs_repair`. A missing required output does not pass merely because it was explained. Cleanup readiness may be deferred with an explicit reason before audit/integration; repeat the recovery gate before deletion.
+原生 Skill 发现机制可作为补充，但禁止替代明确的启动提示。必须保留仓库现有说明，禁止覆盖说明文件或 Agent 全局设置。复用工作树时，先停止旧执行及其产物生成进程，保留固定的产物根目录链接，再传入新合约的准确路径。禁止通过扫描“最新执行”寻找合约。
 
-Use the checker below for structural/path evidence, then review commands, test coverage, raw results, environment, and conclusions independently. The checker does not judge numerical correctness, audit independence, process termination, or business acceptance. This protocol is a handoff gate, not an OS sandbox or a command allowlist.
+### 执行者启动前握手
 
-A Worker reply cannot by itself close a task. Failed validation blocks acceptance, merge, and cleanup; a Coordinator may dispatch a repair or diagnostic run to the same Worker. Freeze the submitted run; new tests, evidence recovery, corrections, and retries use new runs referencing the old manifest through `supersedes`. Do not overwrite the original evidence. Before submission, an active Worker can fill in its own missing outputs in the same run.
+执行者首先读取合约、启动引导、冻结的协议、适用仓库说明和必需 `inputs`，必须理解：
 
-If the Worker crashes, confirm it and its child producers have stopped, revoke its ownership, preserve the partial files, and write a Coordinator-owned termination/validation record. Do not fabricate a Worker report or silently overwrite its unfinished manifest. Retry with a new run. No archival or cleanup while a producer might still write.
+- 专题：共享的昇腾算子目标、参考资料、基线和验收约束。
+- 方案（`V`）：专题中的具体实现方式或假设；ID 在专题内唯一，不表示 Agent 或某次执行。
+- 执行：本次分配的活动，有独立角色、commit 和持久证据。
+- 其他方案及其历史失败属于可读上下文；未获得所有权时禁止修改相关文件。
 
-### Executable Contract Checks
+随后核实并回报实际值，不能只回复“已阅读协议”：
 
-Use the frozen package when checking an existing run:
+- 合约 ID、角色、专题/方案/执行 ID，以及解析后的合约与协议路径。
+- 工作目录、工作树根目录、共享 Git 仓库身份，以及分支/基准 commit 或 detached 目标 commit。仅处理产物的汇总角色必须将不适用的工作树/Git 检出检查记为 `not_applicable` 并说明理由。
+- 产物根目录、专题目录、方案目录、执行目录，以及每个必需输出的绝对路径。
+- 实际 `.agent-artifacts` 链接及其解析后的项目产物根目录；若 `entrypoint` 为 `null`，则核实声明的绝对路径替代方式。
+- 必需输入可读、声明的外部目标位置可写，且没有其他活跃执行者占用工作树。
+
+将检查结果写入 `manifest.preflight`，记录 `status`、时间戳和解析后的路径，之后才能从 `pending` 转为 `running`。存在不一致时，通过已验证的执行路径记录失败，并在修改源码前停止；若连目标路径也不可信，则直接向编排者报告，禁止通过可疑链接写入。
+
+### 所有权与完成握手
+
+```text
+编排者创建冻结的合约/启动引导/协议，以及 pending manifest
+    -> 执行者读取、验证、确认，并接管进行中的执行文件
+    -> 执行者在分配的源码与所有权边界内自由探索
+    -> 执行者收集持久产物、停止产物生成进程、提交终态文件
+    -> 编排者检查实际文件并写入 validation.json
+    -> 专题决策负责人根据验证后的测试/审计证据决定接受或拒绝
+```
+
+执行者探索期间可使用临时输出。提交前必须收集持久证据、记录精确结果 commit、报告未执行的验证与缺失输出，并将执行状态设为 `completed`、`failed` 或 `cancelled`。`completed` 仅表示分配的执行已结束，不表示测试通过或方案已被接受。执行者禁止自行将编排者验收标为通过。提交时冻结执行证据；编排者随后添加其拥有的 `validation.json` 或终止记录，不修改执行者文件。
+
+`validation.json` 初始状态为 `pending`。编排者检查合约身份、启动确认、所有权、实际输出路径与文件、证据和 commit 的来源关联、manifest/报告一致性，以及产物生成进程是否停止。各项结果设为 `passed`、`failed` 或 `not_applicable`；不适用项必须说明理由。只有全部必需检查通过，总体状态才能为 `passed`，否则为 `needs_repair`。缺少必需输出不能仅凭解释就通过。在审计或集成前，可说明理由后暂缓清理就绪检查；删除前必须重新检查可恢复性。
+
+使用下方校验器检查结构和路径证据，再独立审查命令、测试覆盖、原始结果、环境和结论。校验器不判断数值正确性、审计独立性、进程终止或业务验收。本协议提供交接门禁，不提供操作系统沙箱或命令白名单。
+
+执行者的一次回复不能独立关闭任务。验收失败必须阻止接受、合并和清理；编排者可向同一执行者派发修复或诊断执行。已提交执行保持冻结；新测试、证据恢复、修正和重试使用新执行，通过 `supersedes` 引用旧 manifest。禁止覆盖原始证据。尚未提交时，活跃执行者可在同一次执行中补齐自己缺失的输出。
+
+执行者崩溃时，必须确认它及其产物生成子进程均已停止，撤销所有权，保留部分文件，并写入编排者拥有的终止/验收记录。禁止伪造执行者报告或静默覆盖其未完成 manifest。重试使用新执行。只要仍可能有进程写入，就禁止归档或清理。
+
+### 可执行合约检查
+
+检查已有执行时，使用该执行冻结的协议包：
 
 ```bash
 uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/scripts/validate_contract.py <assignment.json>
@@ -495,32 +539,32 @@ uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/script
 uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/scripts/validate_contract.py <assignment.json> --manifest <manifest.json> --check-files
 ```
 
-The first command validates schema and canonical path relationships. The second adds startup/link/input existence checks. The third also checks a terminal handoff's required outputs, evidence paths, reviewed manifest hashes, IDs, role, and commit consistency. Format checking is explicitly enabled and requires its optional dependencies. Templates contain intentional placeholders and are not dispatchable until populated.
+第一条命令检查 schema 和标准路径关系；第二条增加启动文件、链接和输入存在性检查；第三条还检查终态交接的必需输出、证据路径、被审查 manifest 的摘要、身份、角色和 commit 一致性。格式检查必须显式启用，并安装相应可选依赖。模板有意保留占位符，填写完成前禁止派发。
 
-## Standard Run Directory
+## 标准执行目录
 
-Create the following files at their lifecycle stage: assignment/bootstrap/protocol at dispatch, manifest at creation, report at submission, and validation at Coordinator review. Optional evidence directories are created as needed:
+按生命周期阶段创建文件：派发时创建合约、启动引导和协议快照；执行创建时生成 manifest；提交时生成报告；编排者验收时生成 validation。可选证据目录按需创建：
 
 ```text
 <run-id>/
-├── assignment.json              # immutable dispatched input
-├── worker-start.md              # rendered startup instructions
-├── protocol/                    # frozen skill, schemas, templates, checker
-├── manifest.json                # required machine-readable identity and status
-├── report.md                    # required human-readable outcome
-├── validation.json              # Coordinator completion gate
-├── logs/                        # command, build, profiler, and runtime logs
-├── tests/                       # test output and correctness evidence
-├── benchmarks/                  # raw benchmark data and summaries
-├── patches/                     # reproducibility or recovery patches
-├── profiling/                   # profiler-native files and exports
-├── attachments/                 # screenshots or supporting files
-└── environment/                 # environment and dependency snapshots
+├── assignment.json              # 不可变的派发输入
+├── worker-start.md              # 已填充的启动说明
+├── protocol/                    # 冻结的 Skill、schema、模板和校验器
+├── manifest.json                # 必需的机器可读身份与状态
+├── report.md                    # 必需的人类可读结果报告
+├── validation.json              # 编排者完成验收
+├── logs/                        # 命令、构建、profiler 和运行日志
+├── tests/                       # 测试输出与正确性证据
+├── benchmarks/                  # 原始性能数据与汇总
+├── patches/                     # 复现或恢复补丁
+├── profiling/                   # profiler 原生文件与导出文件
+├── attachments/                 # 截图或辅助文件
+└── environment/                 # 环境与依赖快照
 ```
 
-Create only needed optional directories, but use these names consistently. Keep raw data separate from conclusions.
+仅创建需要的可选目录，并统一使用以上名称。原始数据与结论必须分开保存。
 
-Examples:
+示例：
 
 ```text
 tests/pytest.txt
@@ -534,13 +578,13 @@ patches/final.diff
 environment/system.json
 ```
 
-Never store credentials, tokens, private keys, personal data, or secret environment values in artifacts.
+禁止在产物中保存凭据、token、私钥、个人数据或含秘密信息的环境变量值。
 
-## Run `manifest.json`
+## 执行清单 `manifest.json`
 
-Use `templates/run-manifest.json` and `schemas/run-manifest.schema.json` for dispatched Worker runs. Coordinator orchestration records are separate and need not pretend to be Worker assignments. Record ISO 8601 timestamps with timezone, exact full Git commits, and `null` for unknown results.
+派发给执行者的执行使用 `templates/run-manifest.json` 和 `schemas/run-manifest.schema.json`。编排者的编排记录单独保存，不必伪装成执行者合约。时间戳采用带时区的 ISO 8601，Git commit 使用精确完整值，未知结果使用 `null`。
 
-Example (illustrative SHAs):
+示例中的 SHA 仅用于展示：
 
 ```json
 {
@@ -615,28 +659,28 @@ Example (illustrative SHAs):
 }
 ```
 
-Manifest requirements:
+Manifest 要求：
 
-- Keep `assignment_file` fixed as `assignment.json`; IDs, role, scope, Git starting/target commits, and worktree match that contract.
-- `artifacts` and `result.evidence` contain run-relative paths. `reviewed_runs` contains absolute paths to the pinned input manifests from the assignment. References to other runs are inputs, not output files to duplicate.
-- `result_commit` identifies committed implementation/integration output. Read-only test/review roles use `target_commit` and leave `result_commit` null.
-- To claim verification of a result commit, test that clean commit or retain an exact source snapshot and prove it matches the recorded commit. Record command, source state, built binary provenance, environment, and raw outputs. Exploratory dirty-worktree measurements cannot silently become final-commit evidence.
-- Execution timestamps and terminal status are preserved. Archival, later decisions, and supersession live in Coordinator records/indexes; do not edit old manifests to set `superseded_by` or replace outcomes with `archived`.
-- Repeated execution creates a new run. Code changes invalidate applicability of earlier verdicts to the new commit; keep those verdicts as history.
+- `assignment_file` 固定为 `assignment.json`；身份、角色、范围、Git 起始/目标 commit 和工作树必须与合约一致。
+- `artifacts` 和 `result.evidence` 使用执行目录相对路径。`reviewed_runs` 使用合约中固定的输入 manifest 绝对路径。其他执行的引用属于输入，不是需要复制的输出文件。
+- `result_commit` 标识已提交的实现/集成结果。只读测试和审查角色使用 `target_commit`，并将 `result_commit` 留为 `null`。
+- 声称验证了结果 commit 时，必须在该 commit 的干净工作树上测试，或保留精确源码快照并证明它与记录的 commit 一致。必须记录命令、源码状态、构建二进制的来源、环境和原始输出。禁止将有未提交修改的探索性测量直接视为最终 commit 的证据。
+- 保留执行时间戳和终态。归档、后续决策与替代关系写入编排者记录或索引；禁止修改旧 manifest 来设置 `superseded_by`，或将原结果覆盖为 `archived`。
+- 重复执行必须创建新执行。代码变化后，旧结论不再自动适用于新 commit；旧结论保留为历史。
 
-## Test, Benchmark, and Audit Results
+## 测试、基准测试和审计结果
 
-Keep three independent kinds of state:
+必须区分三类独立状态：
 
-| Layer | Values | Owner and meaning |
+| 层次 | 取值 | 负责人及含义 |
 |---|---|---|
-| Run execution | `pending`, `running`, `completed`, `failed`, `cancelled` | Worker: did this execution finish? |
-| Verification result | Role-specific verdict below | Test/benchmark/audit Worker: what does the evidence establish? |
-| Variant decision | `accepted`, `rejected`, `needs_revision`, `superseded`, `final`, `cancelled` | Decision owner: should this exact implementation be adopted? |
+| 执行状态 | `pending`、`running`、`completed`、`failed`、`cancelled` | 执行者：本次执行是否结束？ |
+| 验证结论 | 下方按角色定义 | 测试/基准测试/审计执行者：证据支持什么结论？ |
+| 方案决策 | `accepted`、`rejected`、`needs_revision`、`superseded`、`final`、`cancelled` | 决策负责人：是否采用这个精确实现？ |
 
-Coordinator validation (`pending`, `passed`, `needs_repair`) checks handoff completeness and provenance; it is neither a correctness verdict nor a Variant decision. A fully documented failing test can pass handoff validation while blocking Variant acceptance.
+编排者验收状态为 `pending`、`passed`、`needs_repair`，检查交接完整性和来源关联，不等同于正确性结论或方案决策。记录完整的失败测试可以通过交接验收，同时阻止方案被接受。
 
-Each test or audit has its own assignment, run, manifest, report, and raw evidence under `variants/VNNN/runs/<run-id>/`. The following are role-specific manifest fragments to merge into the common model, not standalone complete manifests:
+每次测试或审计都在 `variants/VNNN/runs/<run-id>/` 下保留独立合约、执行记录、manifest、报告和原始证据。下方示例是合并到通用模型中的角色专用 manifest 片段，不是独立完整的 manifest：
 
 ```json
 {
@@ -653,9 +697,9 @@ Each test or audit has its own assignment, run, manifest, report, and raw eviden
 }
 ```
 
-Test verdicts are `passed`, `failed`, or `inconclusive`. Test-case failures make the verdict `failed` even when the run completed normally. Infrastructure failure, insufficient coverage, or unavailable hardware must not imply a pass. Record `skipped` counts and gate-specific reasons; the acceptance contract decides whether skips are permissible. A test run that did not execute tests cannot pass.
+测试结论使用 `passed`、`failed` 或 `inconclusive`。即使执行正常结束，只要存在测试用例失败，结论就是 `failed`。基础设施故障、覆盖不足或硬件不可用都不能暗示通过。必须记录 `skipped` 数量以及各验收项跳过的原因，由验收合约决定是否允许跳过。没有执行测试的记录禁止标记为通过。
 
-Benchmark verdicts are `valid`, `invalid`, or `inconclusive` and describe measurement validity, not whether latency meets the acceptance target. Preserve metrics, units, shapes, timing methodology, environment, and raw measurements in `result` and its evidence files.
+基准测试结论使用 `valid`、`invalid` 或 `inconclusive`，表示测量是否有效，不表示时延是否达到验收目标。必须在 `result` 及其证据文件中保存指标、单位、shape、计时方法、环境和原始测量值。
 
 ```json
 {
@@ -671,112 +715,112 @@ Benchmark verdicts are `valid`, `invalid`, or `inconclusive` and describe measur
 }
 ```
 
-Review/audit verdicts are `valid`, `valid_with_caveats`, `invalid`, or `inconclusive`. Each finding has a stable ID, severity, claim, code/evidence references, and required follow-up. An audit pins reviewed terminal manifests by hash in its assignment; list the same absolute manifest paths in the result manifest. The target implementation's test/benchmark evidence must match `target_commit`. Baseline/comparison runs may use different commits and must be explicitly identified as comparisons in inputs/report rather than passed off as target evidence.
+审查/审计结论使用 `valid`、`valid_with_caveats`、`invalid` 或 `inconclusive`。每条问题记录必须包含固定 ID、严重程度、具体判断、代码/证据引用和后续要求。审计通过合约中的摘要固定被审查终态 manifest，并在结果 manifest 中列出相同的绝对路径。目标实现的测试/性能证据必须与 `target_commit` 一致。基线或对比执行可以使用其他 commit，但必须在输入和报告中明确标为比较对象，禁止冒充目标证据。
 
-Use an independent auditor for acceptance; implementation self-checks are useful evidence but do not satisfy independent audit. If that role is unavailable, record the gate as incomplete rather than silently self-approving.
+验收必须使用独立审计者。实现者自检是有用证据，但不能满足独立审计要求。缺少独立审计角色时，必须记录验收项未完成，禁止静默自行批准。
 
-Only designated owners update Variant `result.md`, `audit.md`, `decision.md`, and its manifest. Each summary identifies the exact target commit and supporting runs; retain dated prior conclusions when revising it. If two runs disagree, show the disagreement until resolved. New tests/reviews never overwrite earlier run results, and an implementation update requires fresh applicable verification before acceptance.
+只有指定负责人可以更新方案的 `result.md`、`audit.md`、`decision.md` 和 manifest。每份汇总必须指明精确目标 commit 和支持它的执行；修订时保留带日期的历史结论。两次执行结论不一致时，必须呈现差异，直到问题解决。新测试或审查禁止覆盖旧执行结果；实现更新后，必须获得适用于新代码的验证才能被接受。
 
-## Run `report.md`
+## 执行报告 `report.md`
 
-Use this template:
+使用以下模板：
 
 ```markdown
-# Run Report
+# 执行报告
 
-## Objective
+## 目标
 
-State the assigned outcome.
+说明分配的目标。
 
-## Context
+## 上下文
 
-- Base ref or commit:
-- Branch:
-- Worktree:
-- Agent and role:
+- 基准引用或 commit：
+- 分支：
+- 工作树：
+- Agent 与角色：
 
-## Summary
+## 结果概述
 
-Describe what happened and the final outcome.
+描述实际执行过程和最终结果。
 
-## Changes
+## 修改
 
-List source changes and relevant commit SHAs. State `None` for read-only runs.
+列出源码修改和相关 commit SHA。只读执行填写“无”。
 
-## Verification
+## 验证
 
-List each command or procedure, result, and artifact path. Explicitly state what was not run.
+逐项列出命令或步骤、结果和产物路径，明确哪些验证未执行。
 
-## Performance
+## 性能
 
-Summarize benchmark results and link raw files. State `Not measured` when absent.
+汇总基准测试结果并链接原始文件。未测量时填写“未测量”。
 
-## Deviations
+## 偏差
 
-Explain deviations from the assignment or plan.
+解释与合约或计划不一致的部分。
 
-## Risks and Limitations
+## 风险与限制
 
-Record known risks, uncertainty, environment limitations, and coverage gaps.
+记录已知风险、不确定性、环境限制和覆盖缺口。
 
-## Unfinished Work
+## 未完成工作
 
-List remaining items or state `None`.
+列出剩余事项，无则填写“无”。
 
-## Handoff
+## 交接
 
-State the next owner, recommended action, and exact commit to inspect.
+说明下一负责人、建议动作和待检查的精确 commit。
 ```
 
-Do not paste huge logs into the report. Summarize them and reference raw artifacts.
+禁止将大量日志直接粘贴到报告中。必须总结并引用原始产物。
 
-## Operator Engineering Campaign Layout
+## 算子工程专题布局
 
 ```text
 agent-artifacts/campaigns/<campaign>/
-├── README.md                    # goal and directory/context index
-├── manifest.json                # campaign state and Variant index
-├── reference/                   # specification, API, oracle, acceptance, fixtures
-├── baseline/                    # only when meaningful
+├── README.md                    # 目标、目录和上下文索引
+├── manifest.json                # 专题状态与方案索引
+├── reference/                   # 规格、API、正确性依据、验收标准、测试夹具
+├── baseline/                    # 仅在有意义时建立
 ├── variants/
 │   ├── V001/
-│   │   ├── manifest.json        # ancestry, comparisons, commit, run references
+│   │   ├── manifest.json        # 演进关系、对比对象、commit 和执行引用
 │   │   ├── hypothesis.md
 │   │   ├── proposal.md
 │   │   ├── plan.md
 │   │   ├── implementation.md
-│   │   ├── result.md            # test/benchmark summary for exact commits
-│   │   ├── audit.md             # independent audit summary
+│   │   ├── result.md            # 针对精确 commit 的测试/性能汇总
+│   │   ├── audit.md             # 独立审计汇总
 │   │   ├── decision.md
 │   │   └── runs/
 │   │       ├── <implementation-run-id>/
 │   │       ├── <test-run-id>/
 │   │       └── <audit-run-id>/
 │   └── V002/
-├── runs/                        # campaign-wide executions without a Variant
+├── runs/                        # 不归属具体方案的专题级执行
 └── summary/
     ├── status.md
     ├── timeline.md
     ├── comparison.md
     ├── decisions.md
-    └── final-report.md          # create only at closure
+    └── final-report.md          # 仅在收尾时创建
 ```
 
-Create only needed directories. The Campaign README/manifest lets a Worker discover the full Campaign; startup inputs identify the subset it must read. Historical raw logs can be opened on demand. Every new Variant run is nested under its Variant. The worktree link points to the project artifact root, never the directory shown above.
+按需创建目录。专题 README/manifest 帮助执行者发现完整专题，启动输入明确其中必须读取的部分。历史原始日志可按需打开。每个新方案执行都嵌套在其方案目录下。工作树链接指向项目产物根目录，禁止指向上图中的专题目录。
 
-`reference/` is required for every campaign. Establish `baseline/` only when comparison is meaningful. Do not invent baseline measurements for a new operator.
+每个专题必须包含 `reference/`。只有比较有意义时才建立 `baseline/`，禁止为新算子编造基线测量值。
 
-### Compatibility with Existing Campaigns
+### 兼容现有专题
 
-Version 2.0 removes Round and changes both the context-link target and canonical Variant run paths. Preserve historical assignments, runs, protocol snapshots, branches, and evidence at their original paths; use their retained schemas when interpreting them. Do not rename old records or rewrite embedded references.
+2.0 版本移除 Round，并改变上下文链接目标及方案执行的标准路径。历史合约、执行、协议快照、分支和证据必须保留原路径，读取时使用其保留的 schema。禁止重命名旧记录或重写内嵌引用。
 
-Before transitioning a worktree, stop all old Workers and their producers. Use a fresh worktree when old tasks are still active; never retarget their links. New work uses v2 contracts and paths. Index older variants/runs by explicit absolute references. Reserve all existing campaign-wide V IDs before allocating new ones; if legacy IDs were only unique within rounds, assign new campaign-wide Variant IDs for continued variants and retain an explicit legacy-to-new mapping. Legacy history is not retroactively renumbered.
+切换工作树前，必须停止所有旧执行者及其产物生成进程。旧任务仍活跃时，使用新工作树，禁止重定向旧链接。新工作采用 v2 合约与路径，旧方案和旧执行通过明确的绝对路径引用建立索引。分配新方案 ID 前，必须预留专题内已有的所有 V ID；若历史 ID 只在轮次内唯一，则为继续推进的方案分配新的专题级唯一 ID，并保留明确的新旧映射。禁止追溯重编历史编号。
 
-Variant summaries preserve dated decisions and factual corrections. Run execution evidence stays immutable after submission; campaign indexes record subsequent decisions and archival.
+方案汇总保留带日期的决策和事实修正。提交后的执行证据保持不可变，后续决策与归档记录在专题索引中。
 
-## Campaign Definition
+## 专题定义
 
-`README.md` defines stable intent, not every experiment. Start by declaring one campaign type:
+`README.md` 定义稳定目标，不逐项罗列每个实验。首先声明一种专题类型：
 
 ```text
 new-development
@@ -786,41 +830,41 @@ refactor
 validation
 ```
 
-Then include:
+随后包含：
 
 ```markdown
-# <Campaign Title>
+# <专题标题>
 
-## Goal
+## 目标
 
-Define the operator capability or engineering outcome. Add target metrics when applicable.
+定义算子能力或工程目标；适用时加入目标指标。
 
-## Scope
+## 范围
 
-Name the Ascend operator, semantics, API, workloads, shapes, data types, layouts, CANN or framework integration path, and supported Ascend hardware.
+明确昇腾算子、语义、API、负载、shape、数据类型、布局、CANN 或框架接入路径，以及支持的昇腾硬件。
 
-## Constraints
+## 约束
 
-Define correctness tolerance, determinism, memory, compatibility, and maintainability limits.
+定义正确性容差、确定性、内存、兼容性和可维护性限制。
 
-## Reference and Oracle
+## 参考资料与正确性判定依据
 
-Identify the authoritative specification, behavior oracle, fixtures, and numerical tolerances.
+明确权威规格、行为判定依据、测试夹具和数值容差。
 
-## Baseline, If Applicable
+## 基线（适用时）
 
-Record the baseline commit and headline metrics.
+记录基线 commit 和主要指标。
 
-## Success Criteria
+## 成功标准
 
-Define required functional completeness, API compatibility, correctness, performance, portability, and audit gates.
+定义功能完整性、API 兼容性、正确性、性能、可移植性和审计验收要求。
 
-## Exclusions
+## 排除项
 
-State what is intentionally out of scope.
+说明明确不属于本专题的内容。
 ```
 
-Campaign `manifest.json` should include:
+专题 `manifest.json` 建议包含：
 
 ```json
 {
@@ -857,54 +901,54 @@ Campaign `manifest.json` should include:
 }
 ```
 
-## Reference and Baseline Protocol
+## 参考资料与基线协议
 
-Create and review the reference package before implementing or accepting any variant. Record:
+实现或接受任何方案前，必须建立并审查参考资料包，记录：
 
-- Operator semantics, mathematical definition, data types, layouts, broadcasting, aliasing, mutability, and error behavior.
-- API and ABI contract, including shapes, attributes, outputs, dispatch rules, and integration points.
-- Correctness oracle, such as a framework implementation, scalar model, mathematical reference, golden vectors, or differential test target.
-- Numerical tolerances and how they vary by data type, shape, accumulation mode, or hardware.
-- Required fixtures, edge cases, invalid inputs, determinism requirements, and unsupported behavior.
-- Functional, performance, compatibility, documentation, and integration acceptance gates.
+- 算子语义、数学定义、数据类型、布局、广播、别名、可变性和错误行为。
+- API 与 ABI 合约，包括 shape、属性、输出、分发规则和接入点。
+- 正确性判定依据，例如框架实现、标量模型、数学参考、标准测试向量或差分测试目标。
+- 数值容差，以及它随数据类型、shape、累加模式或硬件变化的方式。
+- 必需测试夹具、边界情况、无效输入、确定性要求和不支持的行为。
+- 功能、性能、兼容性、文档和集成验收项。
 
-Apply baseline requirements by campaign type:
+按专题类型确定基线要求：
 
-| Campaign type | Required comparison point |
+| 专题类型 | 必需的比较依据 |
 |---|---|
-| `new-development` | Reference/oracle and explicit acceptance targets; baseline may be `null` |
-| `optimization` | Exact existing implementation commit and audited performance baseline |
-| `porting` | Source-backend behavior plus Ascend target acceptance criteria; performance baseline when meaningful |
-| `refactor` | Exact behavior/correctness baseline and performance non-regression threshold |
-| `validation` | Claimed implementation commit and stated expected behavior or metrics |
+| `new-development` | 参考资料/正确性依据及明确验收目标；基线可为 `null` |
+| `optimization` | 现有实现的精确 commit，以及已审计的性能基线 |
+| `porting` | 源后端行为及昇腾目标验收标准；有意义时建立性能基线 |
+| `refactor` | 精确的行为/正确性基线及性能不回退阈值 |
+| `validation` | 被验证实现的 commit，以及声明的预期行为或指标 |
 
-When a baseline applies, create and audit it before accepting comparative claims. Record:
+适用基线时，必须在接受比较性结论前建立并审计基线，记录：
 
-- Exact baseline commit and whether the worktree was clean.
-- Ascend hardware model and SoC version, firmware, driver, CANN toolkit/runtime/compiler, build flags, power mode, and clock policy.
-- Operating system, relevant libraries, environment variables with secrets removed, and dependency versions.
-- Input shapes, data types, layouts, distributions, seeds, warm-up count, measurement count, synchronization method, and timing method.
-- Correctness oracle, tolerances, determinism requirements, and test coverage.
-- P50, P90 or P95, P99, throughput, memory, and other campaign metrics.
-- Raw benchmark and profiling files.
+- 精确基线 commit，以及工作树是否干净。
+- 昇腾硬件型号、SoC 版本、固件、驱动、CANN 工具包/运行时/编译器、构建参数、电源模式和频率策略。
+- 操作系统、相关库、已去除秘密信息的环境变量，以及依赖版本。
+- 输入 shape、数据类型、布局、分布、随机种子、预热次数、测量次数、同步方式和计时方式。
+- 正确性判定依据、容差、确定性要求和测试覆盖。
+- P50、P90 或 P95、P99、吞吐、内存及其他专题指标。
+- 原始基准测试与性能分析文件。
 
-`baseline/benchmark.md` is the human-readable interpretation. `baseline/benchmark.json` is the machine-readable source. Never reconstruct missing raw baseline numbers from memory. For `new-development`, record `baseline: null` and compare the implementation with its oracle and acceptance targets until a valid internal performance baseline exists.
+`baseline/benchmark.md` 保存人类可读的解释，`baseline/benchmark.json` 保存机器可读的数据来源。禁止凭记忆补出缺失的原始基线数据。对于 `new-development`，记录 `baseline: null`；在建立有效的内部性能基线前，依据正确性判定标准和验收目标评价实现。
 
-If the environment changes materially, either re-establish the baseline or mark cross-environment comparisons invalid.
+环境发生实质变化时，必须重新建立基线，或将跨环境比较标为无效。
 
-## Variant Identity and Evolution
+## 方案身份与演进
 
-Allocate `V001`, `V002`, and subsequent IDs uniquely across the Campaign. A Variant owns one hypothesis or concrete approach, not a time window or a Worker. Store its descriptive mechanism in `name`; directory names remain stable `variants/VNNN/`.
+在整个专题内统一分配 `V001`、`V002` 等唯一 ID。方案表示一个假设或具体实现方式，不表示时间窗口或执行者。机制描述保存在 `name` 中，目录名保持为固定的 `variants/VNNN/`。
 
-Record `parent_variant` for the approach it evolved from, `base_commit` for the exact source starting point, and `comparison_variants` for alternatives it is measured against. Parentage is not the same as comparison. Use `null` for no parent and an empty list for no comparisons.
+使用 `parent_variant` 记录演进来源，`base_commit` 记录精确源码起点，`comparison_variants` 记录比较对象。演进来源不等同于比较对象。无父方案时使用 `null`，无比较对象时使用空列表。
 
-Several Variants and their runs may proceed concurrently. A retry, new measurement, or review creates a Run under the same Variant. A material change in hypothesis/design creates a new Variant assigned by the Coordinator. Refinements within the same hypothesis may produce a new commit under the existing Variant, but its earlier tests/audits do not certify that new commit.
+多个方案及其执行可以并发推进。重试、新测量或审查在同一方案下创建新执行。假设或设计发生实质变化时，由编排者分配新方案。同一假设下的细化可以在已有方案中产生新 commit，但之前的测试和审计不能证明新 commit 已通过验证。
 
-Campaign summaries can compare any set of Variants and record dated milestones without introducing a Round ID, shared "current run", or directory move.
+专题汇总可以比较任意方案集合并记录带日期的里程碑，无需引入 Round ID、共享“当前执行”或移动目录。
 
-## Variant Record Chain
+## 方案记录链
 
-Every implemented variant must preserve this record chain:
+每个已实现方案必须保留以下记录链：
 
 ```text
 hypothesis
@@ -916,117 +960,117 @@ hypothesis
     -> decision
 ```
 
-Do not collapse these into one document. They represent distinct claims and make deviations auditable. For cancellation before implementation or a validation-only task, explicitly record unperformed stages as `not_applicable` with reasons; never fabricate implementation or results to fill a chain.
+禁止将这些记录合并成一份文档。它们分别表达不同判断，使实际偏差可审计。若实现前取消，或任务仅做验证，必须将未执行阶段明确记为 `not_applicable` 并说明原因，禁止为补齐记录链而编造实现或结果。
 
-### `hypothesis.md`
+### `hypothesis.md`：假设
 
-Record:
+记录：
 
-- Observation and evidence.
-- Suspected causal mechanism.
-- Falsifiable prediction.
-- Expected metric range.
-- Conditions under which the hypothesis should not hold.
+- 观察与证据。
+- 推测的因果机制。
+- 可被证伪的预测。
+- 预期指标范围。
+- 假设应当不成立的条件。
 
-### `proposal.md`
+### `proposal.md`：提案
 
-Record:
+记录：
 
-- Proposed design, algorithm, implementation, port, refactor, or optimization and why it follows from the hypothesis.
-- Expected benefit relative to acceptance criteria, current selection, and baseline when applicable.
-- Compatibility and scope.
-- Alternatives considered.
-- Risks, assumptions, and rejection criteria.
+- 提议的设计、算法、实现、移植、重构或优化，以及它与假设的关系。
+- 相对于验收标准、当前选定方案及适用基线的预期收益。
+- 兼容性与范围。
+- 考虑过的替代方案。
+- 风险、前提假设和拒绝标准。
 
-Use `Hypothesis = testable belief` and `Proposal = chosen experiment`.
+区分：假设是可验证的判断，提案是选择开展的实验。
 
-### `plan.md`
+### `plan.md`：计划
 
-Record:
+记录：
 
-- Exact implementation steps.
-- Files or components expected to change.
-- Correctness test matrix.
-- Benchmark and profiling method.
-- Rollback or recovery method.
-- Required agents and role boundaries.
-- Completion and audit gates.
+- 具体实现步骤。
+- 预计修改的文件或组件。
+- 正确性测试矩阵。
+- 基准测试和性能分析方法。
+- 回滚或恢复方法。
+- 所需 Agent 及角色边界。
+- 完成与审计验收项。
 
-Use `Proposal = why/what` and `Plan = how`.
+区分：提案说明“为什么做、做什么”，计划说明“怎么做”。
 
-### `implementation.md`
+### `implementation.md`：实现
 
-Record:
+记录：
 
-- Branch, worktree, base commit, and result commit.
-- Actual source changes.
-- Important design choices.
-- Deviations from the plan and their reasons.
-- Build or environment changes.
-- Known implementation limitations.
+- 分支、工作树、基准 commit 和结果 commit。
+- 实际源码修改。
+- 重要设计选择。
+- 与计划的偏差及原因。
+- 构建或环境变化。
+- 已知实现限制。
 
-Do not claim that planned work was implemented without checking the final diff or commit.
+未经检查最终 diff 或 commit，禁止声称计划中的工作已经实现。
 
-### `result.md`
+### `result.md`：结果
 
-Report observed results without making the acceptance decision. Include:
+报告观测结果，不在此作出接受决定。包含：
 
 ```markdown
-# Result
+# 结果
 
-## Correctness
+## 正确性
 
-- Status:
-- Oracle:
-- Maximum error:
-- Coverage:
+- 状态：
+- 判定依据：
+- 最大误差：
+- 覆盖范围：
 
-## Specification and Integration
+## 规格与集成
 
-- API/ABI conformance:
-- Supported shapes, types, layouts, and Ascend hardware:
-- Framework or runtime integration:
-- Unsupported or incomplete behavior:
+- API/ABI 符合性：
+- 支持的 shape、类型、布局及昇腾硬件：
+- 框架或运行时集成：
+- 不支持或未完成的行为：
 
-## Performance
+## 性能
 
-| Metric | Acceptance Target | Baseline, If Any | Current Selection | This Variant |
+| 指标 | 验收目标 | 基线（如有） | 当前选定方案 | 本方案 |
 |---|---:|---:|---:|---:|
 
-## Improvement
+## 改善幅度
 
-- Versus acceptance target:
-- Versus baseline, if any:
-- Versus current selection:
+- 相对于验收目标：
+- 相对于基线（如有）：
+- 相对于当前选定方案：
 
-## Environment
+## 环境
 
-State whether it matches the reference or comparison environment and reference the environment artifact.
+说明是否与参考或对比环境一致，并引用环境产物。
 
-## Raw Evidence
+## 原始证据
 
-List run IDs and artifact paths.
+列出执行 ID 和产物路径。
 
-## Anomalies
+## 异常
 
-Record variance, regressions, and unexplained observations.
+记录波动、回退和未解释的现象。
 ```
 
-For optimization and refactor campaigns, compare against both the original baseline and current selection when both are valid. For new development, first report oracle conformance and acceptance-gate status, then compare performance with targets or reference implementations only when methodologically valid. State `not applicable` or `not comparable` instead of inventing a baseline.
+优化和重构专题在原始基线与当前选定方案均有效时，必须同时与两者比较。新开发专题首先报告正确性依据符合情况和验收项状态；只有方法有效时，才与性能目标或参考实现比较。没有适用基线时，注明“不适用”或“不可比较”，禁止编造基线。
 
-### `audit.md`
+### `audit.md`：审计
 
-Use an auditor who did not implement the variant for an acceptance audit. Keep self-checks separate. Audit:
+验收审计必须由未参与该方案实现的审计者承担，自检记录单独保留。审计内容包括：
 
-- Correctness, numerical stability, determinism, undefined behavior, data races, and boundary cases.
-- Test coverage and input representativeness.
-- Warm-up, synchronization, iteration count, cache effects, frequency policy, variance, outliers, and statistical confidence.
-- Reproducibility from the recorded commit and environment.
-- Ascend hardware, firmware, driver, CANN, framework, and software compatibility.
-- Memory consumption, maintainability, and operational risk.
-- Whether reported tables match raw artifacts.
+- 正确性、数值稳定性、确定性、未定义行为、数据竞争和边界情况。
+- 测试覆盖和输入代表性。
+- 预热、同步、迭代次数、缓存影响、频率策略、波动、异常值和统计置信度。
+- 根据已记录 commit 和环境进行复现的可行性。
+- 昇腾硬件、固件、驱动、CANN、框架和软件兼容性。
+- 内存消耗、可维护性和运行风险。
+- 报告中的表格是否与原始产物一致。
 
-Use explicit verdicts:
+使用明确结论：
 
 ```text
 valid
@@ -1035,43 +1079,43 @@ invalid
 inconclusive
 ```
 
-An attractive benchmark is not sufficient evidence of a valid operator. Functional completeness, specification conformance, correctness, integration, and compatibility gates remain independent.
+性能数据优异并不足以证明算子有效。功能完整性、规格符合性、正确性、集成和兼容性仍是独立验收项。
 
-### `decision.md`
+### `decision.md`：决策
 
-Every started variant must eventually have a terminal decision. `needs_revision` is an interim decision with a required follow-up, not closure:
+每个已启动方案最终必须有终态决策。`needs_revision` 是需要后续行动的中间决策，不表示结束：
 
 ```markdown
-# Decision
+# 决策
 
-Status: ACCEPTED | REJECTED | NEEDS_REVISION | SUPERSEDED | FINAL | CANCELLED
+状态：ACCEPTED | REJECTED | NEEDS_REVISION | SUPERSEDED | FINAL | CANCELLED
 
-## Reason
+## 理由
 
-Explain the decision using audited evidence.
+根据已审计证据说明决定。
 
-## Selected Commit
+## 选定 commit
 
-Record the exact commit, or `None`.
+记录精确 commit，无则填写“无”。
 
-## Useful Findings
+## 有用发现
 
-Preserve what was learned, especially from failed variants.
+保留所得经验，尤其是失败方案中的发现。
 
-## Action
+## 动作
 
-State merge, carry-forward, rollback, or archival action.
+说明合并、继续推进、回滚或归档动作。
 
-## Follow-up
+## 后续
 
-State the next question or `None`.
+说明下一个问题，无则填写“无”。
 ```
 
-Never record only `failed`. Capture what was tried, why it did not work, which parts were useful, and what should be attempted next.
+禁止只记录 `failed`。必须说明尝试了什么、为什么无效、哪些部分有用，以及下一步应尝试什么。
 
-## Variant `manifest.json`
+## 方案清单 `manifest.json`
 
-Maintain a compact machine-readable index alongside the narrative documents:
+在叙述性文档之外维护简洁的机器可读索引：
 
 ```json
 {
@@ -1108,92 +1152,92 @@ Maintain a compact machine-readable index alongside the narrative documents:
 }
 ```
 
-All `runs` references in a v2 Variant manifest are relative to that Variant directory and identify run manifests. Legacy runs elsewhere use explicit absolute references. Narrative documents remain authoritative for reasoning. The manifest is the index for automation and dashboards.
+v2 方案 manifest 中的所有 `runs` 引用均相对于该方案目录，并指向执行 manifest。其他位置的历史执行使用明确绝对路径引用。叙述性文档仍是推理与理由的权威来源，manifest 为自动化与看板提供索引。
 
-## Summary Protocol
+## 汇总协议
 
-Treat Variant runs and campaign-wide `runs/` as evidence history and `summary/` as current campaign knowledge with append-only timeline and decision records. Only the designated aggregator updates shared summary files.
+方案执行和专题级 `runs/` 保存证据历史，`summary/` 保存当前专题知识，其中时间线和决策记录只追加。只有指定汇总者可以更新共享汇总文件。
 
 ### `summary/status.md`
 
-Keep it short enough to read first when resuming work. Include:
+保持简短，便于恢复工作时优先阅读。包含：
 
-- Campaign state, open questions, and active Variants.
-- Current best variant and exact commit.
-- Reference revision, acceptance status, current selection, target, and baseline or total gain when applicable.
-- Correctness and audit status.
-- Current bottleneck.
-- Active variants and owners.
-- Next action and blocking issues.
+- 专题状态、未解决问题和活跃方案。
+- 当前最佳方案及精确 commit。
+- 参考资料版本、验收状态、当前选择、目标，以及适用时的基线或总体收益。
+- 正确性与审计状态。
+- 当前瓶颈。
+- 活跃方案及负责人。
+- 下一动作与阻塞项。
 
 ### `summary/timeline.md`
 
-Append dated milestones:
+追加带日期的里程碑：
 
 ```text
 timestamp | variant | event | commit | run | outcome
 ```
 
-Do not rewrite history to match the current conclusion.
+禁止为了匹配当前结论而重写历史。
 
 ### `summary/comparison.md`
 
-Maintain one normalized table across all variants:
+维护覆盖全部方案的统一比较表：
 
 ```markdown
-| Variant | Commit | Spec | Correctness | Integration | Primary Metric | vs Target | vs Baseline | Audit | Decision |
+| 方案 | commit | 规格 | 正确性 | 集成 | 主要指标 | 相对目标 | 相对基线 | 审计 | 决策 |
 |---|---|---|---|---|---:|---:|---:|---|---|
 ```
 
-Use the same units and comparison direction. Mark invalid comparisons clearly instead of coercing them into the table.
+使用一致的单位和比较方向。无效比较必须明确标记，禁止强行归入同一口径。
 
 ### `summary/decisions.md`
 
-Maintain lightweight decision records:
+维护简明决策记录：
 
 ```markdown
-## DNNN — <Decision>
+## DNNN — <决策>
 
-- Date:
-- Status: accepted | rejected | superseded
-- Evidence: <variant and run references>
-- Reason:
-- Consequence:
+- 日期：
+- 状态：accepted | rejected | superseded
+- 证据：<方案和执行引用>
+- 理由：
+- 影响：
 ```
 
-Record both adopted techniques and explicit decisions not to use a technique.
+既记录采用的技术，也记录明确不采用某项技术的决定。
 
 ### `summary/final-report.md`
 
-Create only when the campaign is completed or explicitly closed. Include:
+仅在专题完成或明确关闭时创建。包含：
 
-- Goal, scope, constraints, and success criteria.
-- Reference specification, oracle, and acceptance criteria.
-- Baseline commit, environment, and measurements when applicable.
-- Engineering journey by Variant lineage and dated milestones.
-- Key accepted and rejected hypotheses.
-- Final implementation and exact commit.
-- Final correctness and audited performance.
-- Supported Ascend hardware and workload range.
-- Known risks and limitations.
-- Reproduction steps and artifact index.
-- Unresolved questions and future directions.
+- 目标、范围、约束和成功标准。
+- 参考规格、正确性判定依据和验收标准。
+- 适用时的基线 commit、环境和测量结果。
+- 按方案演进关系和带日期里程碑梳理的工程过程。
+- 关键的已接受和已拒绝假设。
+- 最终实现及精确 commit。
+- 最终正确性与经过审计的性能。
+- 支持的昇腾硬件和负载范围。
+- 已知风险与限制。
+- 复现步骤和产物索引。
+- 未解决问题与后续方向。
 
-The final report is the campaign's main handoff document; it does not replace raw evidence.
+最终报告是专题的主要交接文档，不能替代原始证据。
 
-## Naming Conventions
+## 命名约定
 
-Use lowercase ASCII kebab-case for slugs. Avoid spaces, mutable labels such as `latest`, and names such as `final2`.
+短名称使用小写 ASCII kebab-case。避免空格、`latest` 等可变标签，以及 `final2` 等名称。
 
-### Branches
+### 分支
 
-General implementation:
+一般实现任务：
 
 ```text
 agent/<agent>/<task-slug>
 ```
 
-Ascend operator campaign implementation:
+昇腾算子专题实现：
 
 ```text
 dev/<campaign>/vNNN-<variant-slug>
@@ -1202,13 +1246,13 @@ port/<campaign>/vNNN-<variant-slug>
 refactor/<campaign>/vNNN-<variant-slug>
 ```
 
-Review or audit when a branch is required:
+审查或审计需要分支时：
 
 ```text
 review/<campaign>/vNNN-<scope>
 ```
 
-Examples:
+示例：
 
 ```text
 agent/codex/layernorm-tiling
@@ -1219,9 +1263,9 @@ port/layernorm-ascend910b/v001-vector-core
 review/matmul-fp16-ascend910b/v002-correctness
 ```
 
-### Worktrees
+### 工作树
 
-Use a short readable name that maps to the branch:
+使用简短、可读且能对应分支的名称：
 
 ```text
 <agent>-<task-slug>
@@ -1230,14 +1274,14 @@ review-<target-short>
 integration-<project-short>
 ```
 
-### Campaigns and Variants
+### 专题和方案
 
 ```text
 campaign: <operator-or-area>-<dtype-or-target>
 variant:  VNNN
 ```
 
-Examples:
+示例：
 
 ```text
 matmul-fp16-ascend910b
@@ -1245,17 +1289,17 @@ flash-attention-ascend910b
 V002
 ```
 
-Allocate Variant numbers uniquely across the Campaign; never reset or reuse them. Store the mechanism in the manifest's `name` and use `variants/VNNN/` as its directory. Never rename a Variant because priorities changed.
+方案编号在整个专题内唯一，禁止重置或复用。机制名称保存在 manifest 的 `name` 中，目录使用 `variants/VNNN/`。禁止因优先级变化而重命名方案。
 
-### Runs
+### 执行
 
-Use sortable, collision-resistant IDs:
+使用可排序且不易冲突的 ID：
 
 ```text
 YYYYMMDD-HHMMSS-<agent>-<task-or-role>-NN
 ```
 
-Examples:
+示例：
 
 ```text
 20260909-143012-codex-double-buffering-01
@@ -1263,11 +1307,11 @@ Examples:
 20260909-160405-pi-benchmark-01
 ```
 
-If runs can be created concurrently across hosts, append a short host or random suffix.
+可能跨主机并发创建执行时，必须追加简短主机标识或随机后缀。
 
-### Artifacts
+### 产物
 
-Use stable semantic names:
+使用语义稳定的名称：
 
 ```text
 manifest.json
@@ -1281,235 +1325,235 @@ build.log
 final.diff
 ```
 
-Encode variant identity in the directory, not repeatedly in every filename.
+方案身份由目录表达，无需在每个文件名中重复编码。
 
-## Status Machines
+## 状态机
 
-Campaign: `proposed -> active`; active campaigns may pause/resume, complete, or abort. Completion requires all started Variants to have terminal decisions or explicit cancellation. Archive via an external record that preserves the terminal outcome.
+专题：`proposed -> active`。活跃专题可以暂停/恢复、完成或中止。完成前，所有已启动方案必须有终态决策或明确取消记录。归档通过外部记录表达，并保留原终态结果。
 
-Variant: `proposed -> planned -> implementing -> testing -> auditing`. A failed test or inconclusive audit can lead to `needs_revision`, then further implementation/testing/auditing with new runs. Any nonterminal state can be cancelled or rejected with rationale. `accepted` can later become `superseded` or `final` through a dated decision. Validation-only work may omit implementation with an explicit reason. `inconclusive` is a verification verdict, not a Variant terminal decision.
+方案：`proposed -> planned -> implementing -> testing -> auditing`。测试失败或审计无定论时，可转为 `needs_revision`，随后使用新执行继续实现、测试和审计。任何非终态都可以在记录理由后取消或拒绝。`accepted` 可通过带日期的决策转为 `superseded` 或 `final`。仅做验证的任务可说明原因后省略实现阶段。`inconclusive` 是验证结论，不是方案终态决策。
 
-Run transitions:
+执行状态转换：
 
-| From | Allowed next execution states |
+| 当前状态 | 允许的下一执行状态 |
 |---|---|
-| `pending` | `running`, `failed`, `cancelled` |
-| `running` | `completed`, `failed`, `cancelled` |
-| `completed`, `failed`, `cancelled` | None; preserve this outcome and create a new Run for further execution |
+| `pending` | `running`、`failed`、`cancelled` |
+| `running` | `completed`、`failed`、`cancelled` |
+| `completed`、`failed`、`cancelled` | 无；保留当前结果，后续执行创建新 Run |
 
-Coordinator validation is separate: `pending -> passed` or `pending -> needs_repair`. Repair of a submitted run gets its own execution and validation; the old record is retained. Archival and supersession are external metadata, not replacement execution statuses. When a Worker died before writing a terminal state, the Coordinator's termination record governs resumption without impersonating the Worker.
+编排者验收独立转换：`pending -> passed` 或 `pending -> needs_repair`。已提交执行的修复必须有自己的执行和验收记录，旧记录保留。归档与替代关系属于外部元数据，不能覆盖执行状态。执行者未写入终态就停止时，根据编排者的终止记录恢复工作，禁止冒充执行者补写状态。
 
-Worktree: `created -> active -> completed -> removed`, with integration or abandonment recorded when applicable. Completed test/audit worktrees need not be merged. Remove only after stopped producers, successful recovery checks, and authorized cleanup.
+工作树：`created -> active -> completed -> removed`，适用时记录集成或放弃。已完成的测试/审计工作树不要求合并。只有产物生成进程已停止、恢复检查通过且清理获授权后，才允许删除。
 
-`accepted` means the exact Variant commit passed its decision gate; `final` means it is the selected campaign result. No status may imply success without required evidence.
+`accepted` 表示方案的精确 commit 已通过决策验收；`final` 表示它是专题选定的最终结果。缺少必需证据时，禁止用任何状态暗示成功。
 
-## End-to-End Lifecycle
+## 端到端生命周期
 
-The Coordinator follows this sequence for a code-changing task:
+代码修改任务由编排者按以下顺序推进：
 
-1. Discover the actual primary repository path and existing project layout; inspect instructions, active worktrees, and dirty state.
-2. Acquire Coordinator ownership for the project or campaign scope.
-3. Define task, role, owner, base ref, branch, worktree, and run ID.
-4. Create the branch and worktree from an explicit commit.
-5. Create the durable run directory, immutable `assignment.json`, and pending `manifest.json`.
-6. Add the repository-local exclude rule, link `.agent-artifacts/`, and verify both the ignore rule and assigned run path.
-7. Freeze the run-local protocol snapshot, render `worker-start.md`, and start the Worker with absolute paths and an explicit prompt to read the assignment first, then the bootstrap.
-8. Require the Worker preflight handshake before source modification.
-9. Let the Worker implement only within the assigned scope and record deviations.
-10. Let the Worker explore, test, benchmark, and profile freely; retain temporary experiments and collect durable evidence at handoff.
-11. Commit intended changes, verify claims against that exact source state, stop producers, and submit `manifest.json` and `report.md`.
-12. Validate the terminal run and write `validation.json`.
-13. Review or audit the exact result commit from a separate worktree when required.
-14. Make and record the accept, reject, supersede, or cancel decision.
-15. Merge through the designated integration path when accepted.
-16. Let the aggregator update shared summaries.
-17. Verify recoverability, then clean up the disposable worktree and eligible branch.
-18. Record archival outside the immutable run and release Coordinator ownership.
+1. 发现实际主仓库路径和现有项目布局，检查说明、活跃工作树及未提交状态。
+2. 获取项目或专题协调范围的编排所有权。
+3. 定义任务、角色、负责人、基准引用、分支、工作树和执行 ID。
+4. 从明确 commit 创建分支和工作树。
+5. 创建持久执行目录、不可变 `assignment.json` 和 `pending` manifest。
+6. 添加仓库本地忽略规则，创建 `.agent-artifacts/` 链接，并验证忽略规则和分配的执行路径。
+7. 冻结此次执行的协议快照，填充 `worker-start.md`，使用绝对路径启动执行者，并明确要求先读合约、再读启动引导。
+8. 要求执行者在修改源码前完成启动前握手。
+9. 执行者仅在分配范围内实现，并记录偏差。
+10. 执行者自由探索、测试、运行基准测试和性能分析，保留临时实验，并在交接时收集持久证据。
+11. 提交预期修改，针对该精确源码状态验证结论，停止产物生成进程，并提交 `manifest.json` 和 `report.md`。
+12. 验收终态执行，写入 `validation.json`。
+13. 需要时，从独立工作树审查或审计精确结果 commit。
+14. 作出并记录接受、拒绝、替代或取消决定。
+15. 接受后，通过指定集成流程合并。
+16. 由汇总者更新共享汇总。
+17. 验证可恢复性，然后清理可删除工作树和符合条件的分支。
+18. 在不可变执行目录之外记录归档，并释放编排所有权。
 
-For any Ascend operator campaign, establish the reference package and Variant records after acquiring ownership in step 2 and before implementation. Establish a baseline only when the campaign type requires a meaningful comparison point.
+任何昇腾算子专题都必须在第 2 步取得所有权之后、实现之前，建立参考资料包和方案记录。只有专题类型需要有意义的比较依据时，才建立基线。
 
-## Concurrency and Ownership
+## 并发与所有权
 
-Assign one writer per mutable file or namespace:
+每个可变文件或命名空间只分配一名写入者：
 
-| Resource | Writer |
+| 资源 | 写入者 |
 |---|---|
-| Coordinator registry and lease | Active Coordinator |
-| Worker `assignment.json` | Coordinator; immutable after dispatch |
-| Active Worker `manifest.json` and `report.md` | Assigned Worker |
-| Run `validation.json` | Coordinator after Worker termination |
-| Source files in a worktree | Assigned implementation agent |
-| Run directory | Assigned run owner |
-| Variant result | Result owner or designated benchmark agent |
-| Variant audit | Independent auditor |
-| Variant decision | Campaign decision owner |
-| Campaign Variant index and identity allocation | Coordinator |
-| Shared summary files | Single aggregator |
-| Integration branch | Integrator |
+| 编排注册信息和租约 | 活跃编排者 |
+| 执行者的 `assignment.json` | 编排者；派发后不可变 |
+| 活跃执行者的 `manifest.json` 和 `report.md` | 分配的执行者 |
+| 执行的 `validation.json` | 执行者终止后的编排者 |
+| 工作树源码 | 分配的实现 Agent |
+| 执行目录 | 分配的执行负责人 |
+| 方案结果 | 结果负责人或指定基准测试 Agent |
+| 方案审计 | 独立审计者 |
+| 方案决策 | 专题决策负责人 |
+| 专题方案索引与身份分配 | 编排者 |
+| 共享汇总文件 | 唯一汇总者 |
+| 集成分支 | 集成者 |
 
-Agents may read other run and variant artifacts, but must not silently rewrite them. Use a new audit, decision, correction note, or superseding run to preserve provenance.
+Agent 可读取其他执行和方案的产物，但禁止静默重写。通过新审计、决策、修正说明或替代执行保留来源与历史。
 
-When multiple agents need the same code base, give each a separate worktree even if they perform different tasks. For read-only jobs, prefer detached worktrees pinned to exact commits.
+多个 Agent 需要同一代码基线时，即使任务不同，也必须各自分配独立工作树。只读任务建议使用固定在精确 commit 的 detached 工作树。
 
-## Cleanup and Retention
+## 清理与保留
 
-Before removing a worktree, verify:
+删除工作树前，必须核实：
 
-- Every result, including rejected work, remains recoverable through a durable Git ref/bundle or a verified recovery patch with its base and required untracked/binary content. A SHA alone is not retention.
-- `manifest.json` records final status, base commit, and result commit when present.
-- `report.md` records verification, risks, and unfinished work.
-- Required raw test, benchmark, and profiling artifacts are durable outside the worktree.
-- The decision or cancellation reason is recorded.
-- No untracked user files or valuable local state remain.
-- The Worker and all child producers have stopped; the worktree is not used by a live agent or process.
-- Accepted work is merged or its exact commit remains reachable.
+- 每个结果，包括被拒绝的工作，都可通过持久 Git ref/bundle 恢复，或拥有已验证的恢复补丁及其基准、必需的未跟踪文件和二进制内容。仅记录 SHA 不等于保留代码。
+- `manifest.json` 记录终态、基准 commit 和存在时的结果 commit。
+- `report.md` 记录验证、风险和未完成工作。
+- 必需的原始测试、基准测试和性能分析产物已持久保存在工作树之外。
+- 已记录决策或取消理由。
+- 不遗留未跟踪的用户文件或有价值的本地状态。
+- 执行者及所有产物生成子进程均已停止，没有活跃 Agent 或进程使用该工作树。
+- 已接受工作已合并，或其精确 commit 仍然可达。
 
-Then remove the worktree with Git's worktree command. Prune stale metadata only after inspecting it. Delete a branch only when it is merged, rejected with preserved evidence, or explicitly authorized. Never use destructive reset or forced deletion as routine cleanup.
+随后使用 Git 的 worktree 命令删除工作树。只有检查过陈旧元数据后才能清理它。分支仅在已合并、已拒绝且证据已保存，或得到明确授权时才能删除。禁止将破坏性 reset 或强制删除作为常规清理手段。
 
-Retention rules:
+保留规则：
 
-- Keep manifests, reports, decisions, benchmark summaries, and reproducibility metadata long-term.
-- Keep failed and rejected variant knowledge long-term.
-- Keep raw evidence at least through audit and campaign closure.
-- Apply an explicit project retention policy to very large profiler traces or logs.
-- If raw files are expired, retain checksums, metadata, summaries, and the deletion record.
-- Do not mutate historical run contents after archival; append a correction record instead.
-- A `latest` symlink or index may point to the newest run, but it must never replace immutable history.
+- 长期保留 manifest、报告、决策、基准测试汇总和复现元数据。
+- 长期保留失败与被拒绝方案的经验。
+- 原始证据至少保留到审计和专题关闭完成。
+- 超大 profiler trace 或日志按明确的项目保留策略处理。
+- 原始文件到期删除时，必须保留校验和、元数据、汇总和删除记录。
+- 归档后禁止修改历史执行内容；通过追加修正记录处理更正。
+- `latest` 符号链接或索引可以指向最新执行，但禁止替代不可变历史。
 
-## Agent-Neutral Assignment Block
+## 跨 Agent 派发说明
 
-Include or adapt this block when dispatching Codex, Claude, Pi, Herdr, or another agent:
+向 Codex、Claude、Pi、Herdr 或其他 Agent 派发任务时，加入或适配以下说明：
 
 ```markdown
-## Worktree and Artifact Protocol
+## 工作树与产物协议
 
-You own one run directory and, for code-based roles, one assigned Git worktree.
+你拥有一个执行目录；代码角色还拥有一个分配的 Git 工作树。
 
-- First read the exact absolute `assignment.json` and `worker-start.md` supplied in the launch prompt, then the frozen protocol and required inputs before task actions.
-- Treat the assignment as immutable and authoritative.
-- Complete the preflight handshake before modifying source.
-- Start and remain at the assigned worktree root for code operations.
-- Confirm the expected branch or detached commit before editing.
-- Do not modify another agent's worktree, branch, run directory, or summary files.
-- Use the stable project-root `.agent-artifacts/` link to discover Campaigns and read applicable context; never retarget it.
-- Use the immutable absolute `artifacts.run_directory` for durable output and pass it explicitly to child processes; collect scratch evidence before submission.
-- Required run files include `<run_directory>/manifest.json` and `<run_directory>/report.md`; complete every output in the assignment.
-- Store raw evidence under `logs/`, `tests/`, `benchmarks/`, `profiling/`, `patches/`, `attachments/`, or `environment/`.
-- Do not commit raw execution artifacts unless explicitly requested.
-- Record the base commit before work and the result commit after committing intended changes.
-- Explicitly report tests or benchmarks that were not run.
-- Record deviations, risks, and unfinished work.
-- Do not merge, delete branches, remove worktrees, or rewrite shared summaries unless that role is explicitly assigned.
+- 首先读取启动提示中给定绝对路径的 `assignment.json` 和 `worker-start.md`，再阅读冻结协议与必需输入，之后才能执行任务。
+- 合约不可变，是任务的权威依据。
+- 修改源码前必须完成启动前握手。
+- 代码操作从分配的工作树根目录开始，并保持在该工作树根目录。
+- 编辑前确认预期分支或 detached commit。
+- 禁止修改其他 Agent 的工作树、分支、执行目录或汇总文件。
+- 通过指向项目产物根目录的固定 `.agent-artifacts/` 链接发现专题并读取相关上下文；禁止重定向链接。
+- 持久输出使用不可变的绝对 `artifacts.run_directory`，并显式传给子进程；提交前收集临时证据。
+- 必需文件包括 `<run_directory>/manifest.json` 和 `<run_directory>/report.md`；必须完成合约中的每项输出。
+- 原始证据保存在 `logs/`、`tests/`、`benchmarks/`、`profiling/`、`patches/`、`attachments/` 或 `environment/`。
+- 未经明确要求，禁止将原始执行产物提交到 Git。
+- 工作前记录基准 commit，提交预期修改后记录结果 commit。
+- 明确报告未运行的测试或基准测试。
+- 记录偏差、风险和未完成工作。
+- 除非明确分配相应角色，否则禁止合并、删除分支、移除工作树或重写共享汇总。
 ```
 
-For Ascend operator campaign work, append:
+昇腾算子专题任务追加：
 
 ```markdown
-This run is Huawei Ascend operator work and belongs to the specified Campaign and Variant. Confirm the assigned Ascend hardware and CANN or framework target, then read the campaign README, reference package, applicable baseline, current `summary/status.md`, campaign Variant index, and the variant's preceding record documents before acting. Preserve the chain `hypothesis -> proposal -> plan -> implementation -> result -> audit -> decision`. Raw evidence belongs in the run directory; conclusions belong in the variant documents. For new development, validate specification, oracle, Ascend integration, and acceptance targets. For optimization or refactoring, also compare valid results against the original baseline and current selection. Do not invent an inapplicable baseline. Do not accept your own result unless decision authority is explicitly assigned.
+本次执行属于指定专题和方案下的华为昇腾算子任务。首先确认分配的昇腾硬件以及 CANN 或框架目标，再读取专题 README、参考资料、适用基线、当前 `summary/status.md`、专题方案索引和本方案的前序记录，之后再开始行动。必须保留 `hypothesis -> proposal -> plan -> implementation -> result -> audit -> decision` 记录链。原始证据保存在执行目录，结论保存在方案文档。新开发必须验证规格、正确性判定依据、昇腾集成与验收目标；优化或重构还必须将有效结果与原始基线和当前选定方案比较。禁止编造不适用的基线。未明确授予决策权时，禁止接受自己的结果。
 ```
 
-Tool-specific launch commands may differ, but the protocol and ownership rules do not.
+不同工具的启动命令可以不同，但协议与所有权规则相同。
 
-## Role-Specific Instructions
+## 各角色执行说明
 
-### Coordinator Agent
+### 编排者
 
-- Start at the project container root and never edit business source there.
-- Acquire exclusive coordination ownership before allocating mutable identities.
-- Create exact assignments, worktrees, runs, artifact links, and pending manifests.
-- Prepare frozen run-local protocol snapshots and startup files; dispatch Workers with explicit startup paths rather than assuming skill inheritance.
-- Treat active Worker run contents as read-only.
-- Validate terminal evidence and write `validation.json` before advancing state.
-- Create a new superseding run for retries; never rewrite execution history.
-- Delegate implementation, independent audit, integration, aggregation, and cleanup according to explicit permissions.
+- 从项目容器根目录启动，禁止在那里修改业务源码。
+- 分配可变身份前必须取得排他的协调所有权。
+- 创建准确合约、工作树、执行、产物链接和初始 `pending` manifest。
+- 准备冻结的执行级协议快照和启动文件，使用明确启动路径派发，禁止假定 Skill 会自动继承。
+- 对活跃执行者的执行内容只读。
+- 推进状态前验证终态证据并写入 `validation.json`。
+- 重试创建新的替代执行，禁止重写执行历史。
+- 按明确权限分配实现、独立审计、集成、汇总和清理职责。
 
-### Implementation Agent
+### 实现执行者
 
-- Edit only in the assigned worktree.
-- Follow the plan or document deviations.
-- Produce a committed result when source changes are intended.
-- Do not self-approve benchmark validity.
+- 仅在分配的工作树内编辑。
+- 遵循计划，或记录偏差。
+- 涉及源码修改时，产出已提交的结果。
+- 禁止自行批准基准测试有效性。
 
-### Test or Benchmark Agent
+### 测试或基准测试执行者
 
-- Pin work to an exact commit.
-- Preserve full commands, environment, raw outputs, and failures.
-- Do not alter implementation merely to make a test pass unless reassigned as an implementation run.
+- 将任务固定到精确 commit。
+- 保留完整命令、环境、原始输出和失败记录。
+- 除非被重新分配为实现执行，否则禁止仅为使测试通过而修改实现。
 
-### Reviewer or Audit Agent
+### 审查或审计执行者
 
-- Review the exact result commit, not a moving branch tip.
-- Validate reported claims against artifacts and code.
-- Separate correctness, methodology, reproducibility, and maintainability findings.
-- Record `inconclusive` when evidence is insufficient.
+- 审查精确结果 commit，禁止以持续变化的分支顶端代替。
+- 根据产物和代码核实报告中的判断。
+- 分别记录正确性、方法、可复现性和可维护性问题。
+- 证据不足时记录 `inconclusive`。
 
-### Integrator
+### 集成者
 
-- Merge only accepted commits.
-- Re-run integration-level checks when variants interact.
-- Record conflict resolution and resulting merge commit.
-- Never use an implementation agent's worktree as the integration worktree.
+- 仅合并已接受的 commit。
+- 多方案相互影响时重新执行集成级检查。
+- 记录冲突解决过程和产生的合并 commit。
+- 禁止将实现者的工作树用作集成工作树。
 
-### Aggregator
+### 汇总者
 
-- Read manifests and finalized reports; do not infer success from directory names.
-- Normalize metrics only when units and environments are comparable.
-- Update project or campaign summaries as the sole writer.
-- Preserve links to exact variants, runs, artifacts, and commits.
+- 读取 manifest 和最终报告，禁止根据目录名推断成功。
+- 只有单位和环境可比时才统一指标口径。
+- 作为唯一写入者更新项目或专题汇总。
+- 保留指向精确方案、执行、产物和 commit 的链接。
 
-## Resuming Existing Work
+## 恢复已有工作
 
-When joining an existing project or campaign:
+加入现有项目或专题时：
 
-1. Rediscover the actual project container, primary repository, worktrees, and durable `agent-artifacts/` root from the existing layout and Git metadata, without assuming fixed directory names.
-2. Read repository instructions and inspect active worktrees.
-3. For campaigns, read `README.md`, `manifest.json`, the reference package, applicable baseline documents, `summary/status.md`, `summary/decisions.md`, and the active Variant index.
-4. Inspect the target variant and all prior documents in its record chain.
-5. Read relevant run manifests and reports; open raw artifacts only as needed.
-6. Verify branch and commit identities before continuing.
-7. Create a new run for new execution. Never append new execution output to an archived run.
+1. 根据现有布局与 Git 元数据重新发现实际项目容器、主仓库、工作树和持久 `agent-artifacts/` 根目录，禁止假定固定目录名。
+2. 读取仓库说明，检查活跃工作树。
+3. 专题任务读取 `README.md`、`manifest.json`、参考资料、适用基线文档、`summary/status.md`、`summary/decisions.md` 和活跃方案索引。
+4. 检查目标方案及其记录链中的全部前序文档。
+5. 阅读相关执行 manifest 和报告，按需打开原始产物。
+6. 继续前验证分支与 commit 身份。
+7. 新执行创建新 Run，禁止向已归档执行追加新输出。
 
-If records conflict, treat exact commits and raw evidence as primary facts, flag the inconsistency, and ask the responsible owner or create a correction record.
+记录冲突时，以精确 commit 和原始证据为事实依据，标明不一致，向对应负责人询问或创建修正记录。
 
-## Completion Checklist
+## 完成检查清单
 
-Do not report completion until all applicable checks pass:
+所有适用检查通过前，禁止报告完成：
 
-- [ ] Agent operated in the assigned worktree root.
-- [ ] Exactly one Coordinator owned the project or campaign coordination scope.
-- [ ] Every dispatched run retained its immutable `assignment.json`.
-- [ ] Worker read the contract first and acknowledged Campaign/Variant/Run identity, exact output paths, commits, link resolution, inputs, and permissions.
-- [ ] The worktree link stayed at the project artifact root; child producers used the immutable absolute run directory.
-- [ ] Execution status, test/audit verdict, Coordinator validation, and Variant decision remain distinct.
-- [ ] Parallel writers used separate worktrees and branches.
-- [ ] Repository-local Git metadata ignores `.agent-artifacts`; no global Git configuration was changed.
-- [ ] Durable artifacts are outside disposable worktrees.
-- [ ] Run and worktree identities are separately recorded.
-- [ ] `manifest.json` is valid, final, and points to exact commits.
-- [ ] `report.md` summarizes outcome, verification, risks, and handoff.
-- [ ] Coordinator `validation.json` records the completion-gate result.
-- [ ] Raw logs, tests, benchmarks, profiles, and patches use standard directories.
-- [ ] Operator engineering records preserve the complete variant chain.
-- [ ] Reference, oracle, and acceptance criteria are explicit.
-- [ ] Baseline and current-selection comparisons are used only when applicable and methodologically valid.
-- [ ] Audit and decision are recorded independently when required.
-- [ ] Shared summaries were updated by the designated aggregator.
-- [ ] Rejected and superseded work remains discoverable.
-- [ ] Cleanup preserved all recoverable code and evidence.
+- [ ] Agent 在分配的工作树根目录操作。
+- [ ] 项目或专题协调范围恰有一名编排者持有所有权。
+- [ ] 每次派发执行均保留不可变 `assignment.json`。
+- [ ] 执行者首先读取合约，并确认专题/方案/执行身份、精确输出路径、commit、链接解析结果、输入和权限。
+- [ ] 工作树链接始终指向项目产物根目录；产物生成子进程使用不可变的绝对执行目录。
+- [ ] 执行状态、测试/审计结论、编排者验收和方案决策相互区分。
+- [ ] 并行写入者使用独立工作树和分支。
+- [ ] 仓库本地 Git 元数据已忽略 `.agent-artifacts`，未修改全局 Git 配置。
+- [ ] 持久产物位于可清理工作树之外。
+- [ ] 分别记录执行与工作树身份。
+- [ ] `manifest.json` 有效、处于最终状态，并指向精确 commit。
+- [ ] `report.md` 汇总结果、验证、风险和交接。
+- [ ] 编排者的 `validation.json` 记录完成验收结果。
+- [ ] 原始日志、测试、基准测试、性能分析和补丁使用标准目录。
+- [ ] 算子工程记录保留完整方案记录链。
+- [ ] 参考资料、正确性判定依据和验收标准明确。
+- [ ] 仅在适用且方法有效时，使用基线和当前选定方案进行比较。
+- [ ] 需要独立审计与决策时，已分别记录。
+- [ ] 共享汇总由指定汇总者更新。
+- [ ] 被拒绝和被替代的工作仍可发现。
+- [ ] 清理保留了全部可恢复代码和证据。
 
-## Protocol Summary
+## 协议要点
 
-Remember these eight invariants:
+牢记八项不变量：
 
 ```text
-one concurrent code-writing agent -> one worktree
-one execution                     -> one run
-one coordination scope            -> one active Coordinator
-one dispatched Worker             -> one immutable assignment
-worktree                          -> disposable code environment
-agent-artifacts                   -> durable evidence and knowledge
-manifest.json                     -> run-to-Git provenance
-single aggregator                 -> conflict-free shared summaries
+每个并发代码写入 Agent -> 一个工作树
+每次执行              -> 一个 Run
+每个协调范围          -> 一名活跃编排者
+每个被派发执行者      -> 一份不可变合约
+工作树                -> 可清理的代码环境
+agent-artifacts       -> 持久证据与知识
+manifest.json         -> 执行与 Git 状态的来源关联
+唯一汇总者            -> 无并发写冲突的共享汇总
 ```
 
-The purpose is not merely to keep directories tidy. It is to preserve a trustworthy, reusable record of what changed, how it was tested, why a result was believed, which ideas failed, and how later agents can continue without repeating lost work.
+本协议用于保留可信、可复用的记录：修改了什么、如何验证、结论为何可信、哪些思路失败，以及后续 Agent 如何在已有证据上继续工作，避免重复丢失的尝试。

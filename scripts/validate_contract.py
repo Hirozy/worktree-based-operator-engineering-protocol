@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import sys
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -131,8 +132,11 @@ def validate_assignment(data, check_files=False):
         bootstrap = Path(startup["bootstrap_file"])
         if bootstrap.is_file():
             content = bootstrap.read_text()
-            if any(marker in content for marker in ("<assignment-absolute-path>", "<protocol-absolute-path>", "<required-reading-list-with-absolute-paths>", "<required-output-list-with-absolute-destinations>")):
-                errors.append("Worker startup still contains unrendered template placeholders")
+            template = (PACKAGE / "templates/worker-start.md").read_text()
+            placeholders = set(re.findall(r"<[A-Za-z][A-Za-z0-9-]*>", template))
+            unresolved = sorted(marker for marker in placeholders if marker in content)
+            if unresolved:
+                errors.append("Worker startup still contains unrendered template placeholders: " + ", ".join(unresolved))
         for value in data["inputs"]:
             if not Path(value).is_file():
                 errors.append(f"Missing required input file: {value}")

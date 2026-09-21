@@ -44,9 +44,31 @@ class ContractTests(unittest.TestCase):
 
     def write_startup(self):
         (self.run / "assignment.json").write_text(json.dumps(self.a))
-        (self.run / "worker-start.md").write_text("Read the contract first")
+        (self.run / "worker-start.md").write_text(self.render_bootstrap())
         (self.run / "protocol").mkdir(exist_ok=True)
         (self.run / "protocol/SKILL.md").write_text("Frozen protocol")
+
+    def render_bootstrap(self):
+        template = (ROOT / "templates/worker-start.md").read_text()
+        scope, artifacts, startup = (self.a[k] for k in ("scope", "artifacts", "startup"))
+        values = {
+            "<assignment-absolute-path>": startup["assignment_file"],
+            "<protocol-absolute-path>": startup["protocol_file"],
+            "<required-reading-list-with-absolute-paths>": "\n".join(self.a["inputs"]) or "not applicable",
+            "<working-directory-absolute-path>": startup["working_directory"],
+            "<repository-absolute-path>": self.a["project"]["repository"],
+            "<worktree-absolute-path-or-not-applicable>": self.a["project"]["worktree"] or "not applicable",
+            "<artifact-root-absolute-path>": artifacts["root_directory"],
+            "<campaign-id-and-absolute-directory-or-not-applicable>": f"{scope['campaign_id']}: {scope['campaign_directory']}" if scope["campaign_id"] else "not applicable",
+            "<variant-id-and-absolute-directory-or-not-applicable>": f"{scope['variant_id']}: {scope['variant_directory']}" if scope["variant_id"] else "not applicable",
+            "<run-id-and-absolute-directory>": f"{artifacts['run_id']}: {artifacts['run_directory']}",
+            "<absolute-link-path-to-artifact-root-or-not-applicable>": f"{self.a['project']['worktree']}/.agent-artifacts -> {artifacts['root_directory']}" if artifacts["entrypoint"] else "not applicable",
+            "<required-output-list-with-absolute-destinations>": "\n".join(str(self.run / path) for path in self.a["required_outputs"]),
+        }
+        self.assertEqual(set(values), set(re.findall(r"<[A-Za-z][A-Za-z0-9-]*>", template)))
+        for marker, value in values.items():
+            template = template.replace(marker, value)
+        return template
 
     def manifest(self, role="test", verdict="passed"):
         self.a["role"] = role
@@ -201,6 +223,31 @@ class ContractTests(unittest.TestCase):
     def test_unrendered_bootstrap_rejected(self):
         (self.run / "worker-start.md").write_text((ROOT / "templates/worker-start.md").read_text())
         self.assertTrue(validator.validate_assignment(self.a, True))
+
+    def test_each_unrendered_directory_placeholder_is_rejected(self):
+        template = (ROOT / "templates/worker-start.md").read_text()
+        rendered = self.render_bootstrap()
+        for marker in set(re.findall(r"<[A-Za-z][A-Za-z0-9-]*>", template)):
+            with self.subTest(marker=marker):
+                (self.run / "worker-start.md").write_text(rendered + "\n" + marker)
+                errors = validator.validate_assignment(self.a, True)
+                self.assertTrue(any("unrendered template placeholders" in e and marker in e for e in errors), errors)
+
+    def test_directory_spelling_plural_and_case_are_contract_interfaces(self):
+        original = json.dumps(self.a)
+        for before, after in [("/campaigns/", "/campaign/"), ("/campaigns/", "/专题/"),
+                              ("/variants/", "/variant/"), ("/variants/", "/方案/"),
+                              ("/V001/", "/v001/"), ("/V001/", "/V001-double-buffer/"),
+                              ("/runs/", "/run/")]:
+            with self.subTest(before=before, after=after):
+                changed = json.loads(original.replace(before, after))
+                self.assertTrue(validator.validate_assignment(changed))
+
+    def test_run_path_is_relative_to_project_root_not_campaign_or_variant(self):
+        for wrong in ("runs/implementation-01", "variants/V001/runs/implementation-01"):
+            with self.subTest(path=wrong):
+                self.a["artifacts"]["run_path"] = wrong
+                self.assertTrue(validator.validate_assignment(self.a))
 
     def test_missing_preflight_mapping_and_wrong_target(self):
         m = self.manifest()
