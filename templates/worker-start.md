@@ -17,14 +17,14 @@
 ## 准确目录与链接映射
 
 ```text
-工作目录：    <working-directory-absolute-path>
-仓库：        <repository-absolute-path>
-工作树：      <worktree-absolute-path-or-not-applicable>
-产物根目录：  <artifact-root-absolute-path>
-专题：        <campaign-id-and-absolute-directory-or-not-applicable>
-方案：        <variant-id-and-absolute-directory-or-not-applicable>
-执行：        <run-id-and-absolute-directory>
-上下文链接：  <absolute-link-path-to-artifact-root-or-not-applicable>
+working directory: <working-directory-absolute-path>
+repository:        <repository-absolute-path>
+worktree:          <worktree-absolute-path-or-not-applicable>
+artifact root:     <artifact-root-absolute-path>
+campaign:          <campaign-id-and-absolute-directory-or-not-applicable>
+variant:           <variant-id-and-absolute-directory-or-not-applicable>
+run:               <run-id-and-absolute-directory>
+context link:      <absolute-link-path-to-artifact-root-or-not-applicable>
 ```
 
 存在上下文链接时，其目标始终为项目产物根目录。禁止指向专题、方案或执行目录，也禁止随任务切换而改变。合约声明 `entrypoint: null` 时，直接使用绝对路径，禁止自行创建替代链接。

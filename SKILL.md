@@ -64,11 +64,11 @@ description: "仅用于面向华为昇腾硬件或 CANN 软件栈的算子工程
 不需要专题的独立昇腾算子任务使用：
 
 ```text
-任务
-├── 工作树
-│   └── 分支
-│       └── commit
-└── 执行
+Task
+├── Worktree
+│   └── Branch
+│       └── Commit
+└── Run
     ├── manifest.json
     ├── report.md
     ├── tests/
@@ -80,13 +80,13 @@ description: "仅用于面向华为昇腾硬件或 CANN 软件栈的算子工程
 迭代型昇腾算子工程使用：
 
 ```text
-项目
-└── 专题
-    ├── 参考资料
-    ├── 基线（适用时）
-    └── 方案
-        └── 执行
-            └── 产物
+Project
+└── Campaign
+    ├── Reference
+    ├── Baseline (when applicable)
+    └── Variant
+        └── Run
+            └── Artifact
 ```
 
 各层分别回答：
@@ -104,13 +104,13 @@ description: "仅用于面向华为昇腾硬件或 CANN 软件栈的算子工程
 执行控制流程：
 
 ```text
-编排者
-    -> 任务合约
-    -> 工作树 + 执行
-    -> 执行者
-    -> 完成证据
-    -> 编排者验收
-    -> 下一角色或状态转换
+Coordinator
+    -> Assignment Envelope
+    -> Worktree + Run
+    -> Worker
+    -> Completion Evidence
+    -> Coordinator Validation
+    -> Next Role or State Transition
 ```
 
 ## 项目布局
@@ -172,13 +172,13 @@ git -C "<existing-worktree-path>" rev-parse --path-format=absolute --git-common-
 启动时，修改代码前必须核实：
 
 ```text
-当前目录 == 分配的工作树根目录
-当前分支或 detached commit == 合约要求
-Git 工作树根目录 == project.worktree
-共享 Git 仓库 == project.repository
-产物链接目标 == artifacts.root_directory（固定的项目产物根目录）
-执行目录 == artifacts.run_directory
-没有其他活跃 Agent 占用该工作树
+current directory == assigned worktree root
+current branch or detached commit == assignment
+Git worktree root == assignment project.worktree
+shared Git repository == assignment project.repository
+artifact link target == artifacts.root_directory (stable project artifact root)
+run directory == assignment artifacts.run_directory
+no other active agent owns this worktree
 ```
 
 编辑前必须读取适用的 `AGENTS.md`、`CLAUDE.md`、仓库说明和用户约束。
@@ -266,8 +266,8 @@ git -C "<primary-repository-absolute-path>" worktree add --detach \
 身份必须相互独立：
 
 ```text
-worktree_id = 代码检出位置
-run_id      = 一次执行及其证据
+worktree_id = code checkout location
+run_id      = one execution and its evidence
 ```
 
 一个工作树可以承载多次顺序执行。一个方案可以在不同时期使用多个工作树。审查执行可以从另一个工作树检查实现者的结果 commit。
@@ -275,11 +275,11 @@ run_id      = 一次执行及其证据
 禁止仅用工作树名称标识执行。必须在 `manifest.json` 中明确记录关联：
 
 ```text
-执行 -> 工作树路径
-执行 -> 分支
-执行 -> 基准 commit
-执行 -> 结果 commit
-执行 -> 专题/方案（适用时）
+run -> worktree path
+run -> branch
+run -> base commit
+run -> result commit
+run -> campaign/variant (when applicable)
 ```
 
 工作树生命周期：
@@ -314,9 +314,9 @@ created -> active -> completed -> merged -> removed
 新执行的标准路径：
 
 ```text
-独立任务：  agent-artifacts/runs/<run-id>/
-专题级：    agent-artifacts/campaigns/<campaign>/runs/<run-id>/
-方案级：    agent-artifacts/campaigns/<campaign>/variants/VNNN/runs/<run-id>/
+standalone: agent-artifacts/runs/<run-id>/
+campaign:   agent-artifacts/campaigns/<campaign>/runs/<run-id>/
+variant:    agent-artifacts/campaigns/<campaign>/variants/VNNN/runs/<run-id>/
 ```
 
 专题级执行用于不归属某个具体方案的任务，例如汇总或准备参考资料。对具体方案开展的实现、测试和审计必须归入该方案。每次执行只有一个标准存储位置，索引只保存引用。
@@ -511,12 +511,12 @@ git check-ignore -v .agent-artifacts
 ### 所有权与完成握手
 
 ```text
-编排者创建冻结的合约/启动引导/协议，以及 pending manifest
-    -> 执行者读取、验证、确认，并接管进行中的执行文件
-    -> 执行者在分配的源码与所有权边界内自由探索
-    -> 执行者收集持久产物、停止产物生成进程、提交终态文件
-    -> 编排者检查实际文件并写入 validation.json
-    -> 专题决策负责人根据验证后的测试/审计证据决定接受或拒绝
+Coordinator creates frozen contract/bootstrap/protocol and pending manifest
+    -> Worker reads, verifies, acknowledges, and owns active execution files
+    -> Worker explores freely within assigned source/ownership boundaries
+    -> Worker collects durable outputs, stops producers, and submits terminal files
+    -> Coordinator checks actual files and writes validation.json
+    -> Campaign decision owner accepts or rejects using verified test/audit evidence
 ```
 
 执行者探索期间可使用临时输出。提交前必须收集持久证据、记录精确结果 commit、报告未执行的验证与缺失输出，并将执行状态设为 `completed`、`failed` 或 `cancelled`。`completed` 仅表示分配的执行已结束，不表示测试通过或方案已被接受。执行者禁止自行将编排者验收标为通过。提交时冻结执行证据；编排者随后添加其拥有的 `validation.json` 或终止记录，不修改执行者文件。
