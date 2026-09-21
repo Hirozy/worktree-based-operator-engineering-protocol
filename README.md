@@ -7,6 +7,7 @@
 - 仅适用于明确面向华为昇腾硬件或 CANN 软件栈的算子开发、优化、移植、验证、基准测试和审计任务。
 - 为每个修改昇腾算子代码的 Agent 分配独立的 Git worktree，避免并行开发时发生工作区冲突。
 - 定义编排者（Coordinator）角色，统一管理 worktree、执行记录（Run）、权限及生命周期状态转换。
+- 将 Coordinator 的同步职责限定为创建 worktree、Campaign/Variant/Run 结构、任务合同、约定和产物布局；初始化完成后返回 `ready`，不等待 CANN 环境、baseline 或 Worker 执行。
 - 根据 Git 元数据和现有布局自动识别主仓库的实际目录，不要求目录名为 `repo`，也不重命名现有工作区。
 - 使用不可变的任务合同 `assignment.json`，向执行者（Worker）传递准确的路径、提交、输入、输出和产物位置。
 - 要求 Worker 执行启动前检查，并由 Coordinator 通过 `validation.json` 记录任务完成验收。
@@ -51,6 +52,10 @@ v2 移除 Round 的目录、字段和状态。V 表示一个具体方案/假设�
 Worker 可读取完整 Campaign 的上下文，启动时必读文件列入合约 `inputs`。持久产物写入合约给定的绝对 `run_directory`，并将该路径显式传给子进程。Worker 仍可自由使用 shell、编译器、profiler 和临时脚本；交接前须归档支持结论的证据。
 
 测试和审计使用独立的 Run，绑定精确 `target_commit`。审计合约还记录被审查 Run 的 manifest 路径和摘要。`completed` 仅表示执行结束，不能代替测试通过、审计有效或方案被接受。Coordinator 检查真实文件后记录 `validation.json`；缺少证据时不能合并或清理。
+
+Coordinator 的同步初始化在按需创建 worktree、Campaign/Variant/Run 目录与索引、任务合同、协议快照、启动引导、产物结构和上下文链接，通过合约校验及 `--check-files` 检查并核对初始 manifest 后结束。`ready` 是报告或回复中的初始化交接标记，不是 manifest 的新增状态；Run 的 `status` 和 `preflight.status` 保持 `pending`。仅请求创建时，返回实际路径、commit、合约和启动引导位置及待执行事项，不启动或等待 Worker，也不要求终态报告或测试结果。
+
+Coordinator 不检查或准备 CANN、驱动、固件、硬件、编译器和运行时环境，也不执行 baseline、测试、构建或 profiling；这些工作由后续被授权的执行者完成。缺少必需参考资料时，先为准备任务创建合约，资料就绪后再派发依赖它们的实现任务。已有本地仓库、校验依赖可用且无需等待外部服务时，初始化目标为 1–5 分钟，复杂仓库以 10 分钟以内为目标；这不是实测保证。超过 15 分钟必须报告当前步骤、实际耗时及已知阻塞原因，不得跳过检查。
 
 已有历史记录保留原路径和协议，不自动迁移。切换旧 worktree 前必须结束旧 Worker 及子进程；仍有任务运行时使用新 worktree，不能重定向旧链接。版本 2.0 的合约和校验器不用于直接解释旧版合同。
 
@@ -108,7 +113,7 @@ uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/script
 uv run --no-project --with 'jsonschema[format]==4.26.0' python -m unittest discover -s tests -v
 ```
 
-校验器只读文件，不限制 Worker 的执行工具，也不自动接管编排。它检查结构、路径、输入摘要和合约/manifest 一致性；实际 Git 状态、进程终止、精度、性能方法和审计结论仍由 Coordinator 与独立审查负责。将校验放入交接流程，才能阻止不合格结果进入合并和清理。
+校验器只读文件，不限制 Worker 的执行工具，也不自动接管编排。它检查结构、路径、输入摘要和合约/manifest 一致性；Coordinator 负责检查 Git 来源、文件和交接完整性，测试、基准测试和审计角色负责精度、性能方法、环境和结论。Coordinator 不执行 CANN 或环境探测。将校验放入交接流程，才能阻止不合格结果进入合并和清理。
 
 ## 文件说明
 
