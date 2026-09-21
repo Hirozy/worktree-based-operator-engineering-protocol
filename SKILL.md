@@ -58,17 +58,16 @@ Task
     └── patches/
 ```
 
-For multi-round Ascend operator engineering, use the following logical hierarchy (not mandatory directory nesting):
+For iterative Ascend operator engineering, use this hierarchy:
 
 ```text
 Project
 └── Campaign
     ├── Reference
     ├── Baseline, when applicable
-    └── Round
-        └── Variant
-            └── Run
-                └── Artifact
+    └── Variant
+        └── Run
+            └── Artifact
 ```
 
 Each level answers a different question:
@@ -77,12 +76,11 @@ Each level answers a different question:
 |---|---|
 | Project | What Ascend operator system or repository are we developing? |
 | Campaign | What Ascend operator outcome, target, and constraints are being pursued? |
-| Round | What bottleneck or question defines this stage? |
 | Variant | Which concrete design, implementation, porting, or optimization hypothesis is being tested? |
 | Run | Which specific agent, test, profile, or benchmark execution occurred? |
 | Artifact | What raw or derived evidence did that execution produce? |
 
-Do not substitute run numbers for rounds or variants. A variant may require several runs, and a round may compare several variants.
+A Variant is one concrete hypothesis or implementation approach, not a Worker or an execution. A Run is one execution of that approach: implementation, test, benchmark, review, or audit. A Variant can have many Runs, each with its own assignment and exact commits. Allocate Variant IDs once across the Campaign; never reuse them. There is no Round identity, directory, or lifecycle in new campaigns. Record comparisons and milestones in summaries without grouping ownership into rounds.
 
 The execution control flow is:
 
@@ -106,7 +104,7 @@ Prefer a project container whose Git worktrees and durable artifacts are sibling
 ├── worktrees/                    # disposable worktrees
 │   ├── codex-layernorm-tiling/
 │   ├── claude-aicore-review/
-│   └── matmul-ascend910b-r003-v002/
+│   └── matmul-ascend910b-v002/
 └── agent-artifacts/              # durable, shared, outside worktrees
     ├── runs/                     # non-campaign runs
     └── campaigns/                # operator engineering campaigns
@@ -159,7 +157,7 @@ current directory == assigned worktree root
 current branch or detached commit == assignment
 Git worktree root == assignment project.worktree
 shared Git repository == assignment project.repository
-artifact link == assigned campaign directory, or project artifact root for non-campaign work
+artifact link == assignment artifacts.root_directory (the stable project artifact root)
 run directory == assignment artifacts.run_directory
 no other active agent owns this worktree
 ```
@@ -175,7 +173,7 @@ Use a Coordinator whenever qualifying Ascend operator work spans multiple agents
 The Coordinator owns workflow control, not implementation. It must:
 
 - Discover the actual primary repository and assigned worktree paths without requiring fixed directory names; inspect repository instructions, active worktrees, dirty state, campaign state, and current summaries before dispatch.
-- Allocate collision-free task, campaign, round, variant, worktree, branch, and run identities.
+- Allocate collision-free task, campaign, variant, worktree, branch, and run identities.
 - Resolve and record exact base commits before creating worktrees.
 - Create Worker run directories, immutable assignment envelopes, initial manifests, and `.agent-artifacts` context links.
 - Maintain the repository-local Git exclude rule for `.agent-artifacts` without modifying global Git configuration or committed ignore files.
@@ -221,8 +219,8 @@ For an Ascend operator campaign variant, choose a branch prefix that matches the
 
 ```bash
 git -C "<primary-repository-absolute-path>" worktree add \
-  -b <dev|opt|port|refactor>/<campaign>/r<round>-v<variant>-<slug> \
-  "<worktrees-root-absolute-path>/<campaign-short>-r<round>-v<variant>" \
+  -b <dev|opt|port|refactor>/<campaign>/v<variant>-<slug> \
+  "<worktrees-root-absolute-path>/<campaign-short>-v<variant>" \
   <base-commit>
 ```
 
@@ -262,7 +260,7 @@ run -> worktree path
 run -> branch
 run -> base commit
 run -> result commit
-run -> campaign/round/variant, when applicable
+run -> campaign/variant, when applicable
 ```
 
 Worktree lifecycle:
@@ -272,34 +270,37 @@ created -> active -> completed -> merged -> removed
                          └------> abandoned -> removed
 ```
 
-Run lifecycle:
-
-```text
-pending -> running -> completed -> archived
-                  ├-> failed -> archived
-                  ├-> cancelled -> archived
-                  └-> superseded -> archived
-```
+Run execution status is `pending`, `running`, `completed`, `failed`, or `cancelled`. Execution status is separate from Coordinator validation, the test/audit verdict, and Variant decisions; see Status Machines. Archival and supersession are recorded externally and do not overwrite the terminal manifest.
 
 A run usually outlives its worktree.
 
 ## Durable Artifact Access
 
-Create the campaign and run directories before launching the agent. Expose the campaign root inside every campaign worktree through a stable path:
+Create the project artifact root and the exact assigned run directory before dispatch. Every worktree uses the same stable context mapping:
 
 ```text
-<worktree>/.agent-artifacts -> <project-container>/agent-artifacts/campaigns/<campaign>
+<worktree>/.agent-artifacts -> <project-container>/agent-artifacts/
 ```
 
-For work outside a campaign, map the same entrypoint to the project artifact root:
+Never point this link at a Campaign, Variant, or Run, and never retarget it when a task changes. Workers can read the campaign index, reference, baseline, other variants, and historical evidence through this root. Read access does not grant ownership of those files.
+
+The immutable assignment declares `artifacts.root_directory`, the root-relative `artifacts.run_path`, and the absolute `artifacts.run_directory`. These must identify the same location. Pass the absolute run directory to every child process that produces durable evidence; never derive output paths from cwd, a `latest` link, or a mutable "current task" pointer.
+
+When symlinks are unavailable, set `artifacts.entrypoint` to `null` and use the absolute paths directly. An artifact-only Worker may also omit the link and worktree. Verify real paths before writing; never replace a real user directory with a symlink.
+
+Workers remain free to use shell commands, build tools, profilers, temporary scripts, and intermediate files inside their assigned worktree or permitted scratch space. The contract governs durable deliverables, not every temporary file. Before submission, collect all evidence supporting claims into the assigned run directory, recording source and destination when copying tool output. Persistent campaign documents outside the run require explicit ownership in `permissions.additional_writable_paths`.
+
+Do not archive a run, reuse its worktree, or switch startup pointers until the Worker and all producing child processes have stopped. The stable link alone does not make concurrent source edits safe.
+
+Canonical paths for new executions:
 
 ```text
-<worktree>/.agent-artifacts -> <project-container>/agent-artifacts
+standalone:      agent-artifacts/runs/<run-id>/
+campaign-wide:  agent-artifacts/campaigns/<campaign>/runs/<run-id>/
+variant:        agent-artifacts/campaigns/<campaign>/variants/VNNN/runs/<run-id>/
 ```
 
-Use a symlink when supported. If symlinks are unavailable, provide the absolute campaign or project artifact root through the agent's task instructions or an environment variable such as `AGENT_ARTIFACT_ROOT`.
-
-The path `.agent-artifacts/` is a shared context interface, not the Worker's private run directory. Verify that it resolves outside the worktree. A Worker may read applicable campaign context but may write only within the `run_directory` declared by its assignment, except when its role explicitly grants ownership of another campaign document. Never replace a real user directory with a symlink.
+Campaign-wide runs are for work without a particular Variant, such as aggregation or reference preparation. Every implementation, test, or audit of a particular Variant belongs under that Variant. Each run has one canonical location; indexes only reference it.
 
 ### Git Ignore Hygiene
 
@@ -331,69 +332,61 @@ git check-ignore -v .agent-artifacts
 
 If `.agent-artifacts` is already tracked, stop and report it. Do not remove it from the index or rewrite repository history without explicit authorization.
 
-For a standalone Ascend operator task, use:
-
-```text
-agent-artifacts/runs/<run-id>/
-```
-
-For an Ascend operator campaign variant, use:
-
-```text
-agent-artifacts/campaigns/<campaign>/runs/<run-id>/
-```
-
-Do not duplicate a run in both locations. Store it at its canonical path and put only an index entry or relative reference in a project registry when global discovery is needed.
-
 ## Assignment Envelope Protocol
 
-The Coordinator must create `assignment.json` inside the target run directory before launching a Worker. The assignment is the authoritative input contract. Prompts and environment variables carry only enough information to locate and activate that contract.
+The Coordinator creates `assignment.json` in the exact run directory before dispatch. The assignment is the authoritative task contract. Use `templates/assignment.json`, populate every placeholder, and validate with `scripts/validate_contract.py`. Version 2.0 deliberately rejects the previous layout; historical assignments keep their own frozen schema.
 
-Use the retained `templates/assignment.json` and validate populated assignments against `schemas/assignment.schema.json` when those files are available.
-
-Minimum assignment schema:
+Example (the repeated `a` SHA is illustrative; resolve a real full commit before dispatch):
 
 ```json
 {
-  "schema_version": "1.1",
-  "assignment_id": "R001-V001-implementation-01",
-  "created_at": "2026-09-10T10:00:00+08:00",
+  "schema_version": "2.0",
+  "assignment_id": "V001-implementation-01",
+  "created_at": "2026-09-21T10:00:00+08:00",
   "coordinator": {
-    "name": "herdr",
-    "run_id": "20260910-095500-herdr-coordinator-01"
+    "name": "coordinator",
+    "run_id": "20260921-coordinator-01"
   },
   "role": "implementation",
-  "objective": "Implement the reference FP16 RMSNorm operator for Ascend 910B.",
+  "objective": "Implement FP16 RMSNorm for Ascend 910B.",
   "project": {
     "container": "/projects/rmsnorm",
     "repository": "/projects/rmsnorm/ascend-ops",
-    "worktree": "/projects/rmsnorm/worktrees/rmsnorm-ascend910b-r001-v001"
+    "worktree": "/projects/rmsnorm/worktrees/rmsnorm-01"
   },
   "git": {
-    "branch": "dev/rmsnorm-fp16-ascend910b/r001-v001-reference",
-    "base_commit": "<full-sha>",
+    "branch": "dev/rmsnorm-01/v001-reference",
+    "base_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "target_commit": null
   },
   "scope": {
-    "campaign_id": "rmsnorm-fp16-ascend910b",
-    "campaign_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16-ascend910b",
-    "round_id": "R001",
-    "variant_id": "V001"
+    "campaign_id": "rmsnorm-01",
+    "campaign_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01",
+    "variant_id": "V001",
+    "variant_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001"
   },
   "artifacts": {
-    "run_id": "20260910-100000-codex-implementation-01",
+    "root_directory": "/projects/rmsnorm/agent-artifacts",
+    "run_id": "rmsnorm-01",
     "entrypoint": ".agent-artifacts",
-    "run_path": "runs/20260910-100000-codex-implementation-01",
-    "run_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-fp16-ascend910b/runs/20260910-100000-codex-implementation-01"
+    "run_path": "campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01",
+    "run_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01"
+  },
+  "startup": {
+    "working_directory": "/projects/rmsnorm/worktrees/rmsnorm-01",
+    "assignment_file": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01/assignment.json",
+    "bootstrap_file": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01/worker-start.md",
+    "protocol_file": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01/protocol/SKILL.md"
   },
   "inputs": [
-    "reference/specification.md",
-    "reference/api-contract.md",
-    "reference/oracle.md",
-    "reference/acceptance.md",
-    "manifest.json",
-    "summary/status.md",
-    "variants/V001/plan.md"
+    "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/README.md",
+    "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/manifest.json",
+    "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/reference/specification.md",
+    "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/reference/api-contract.md",
+    "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/reference/oracle.md",
+    "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/reference/acceptance.md",
+    "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/summary/status.md",
+    "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/plan.md"
   ],
   "required_outputs": [
     "manifest.json",
@@ -402,15 +395,16 @@ Minimum assignment schema:
     "patches/final.diff"
   ],
   "verification": [
-    "Run correctness tests",
-    "Record unsupported shapes",
-    "Record the exact result commit"
+    "Record a clean result commit and test that exact commit",
+    "Record unsupported shapes and unexecuted gates"
   ],
+  "reviewed_runs": [],
   "permissions": {
     "modify_source": true,
     "merge": false,
     "remove_worktree": false,
-    "update_summary": false
+    "update_summary": false,
+    "additional_writable_paths": []
   },
   "supersedes": null
 }
@@ -418,94 +412,100 @@ Minimum assignment schema:
 
 Assignment rules:
 
-- Use absolute paths for host-local project, repository, worktree, and run locations.
-- Populate `project.repository` with the discovered primary worktree or bare repository path, not a directory name imposed by an example. `project.worktree` is the assigned code checkout and may differ.
-- Record the issuing Coordinator and its run ID.
-- Treat `artifacts.entrypoint` as the campaign context root, not as the run directory.
-- Record `artifacts.run_path` relative to the entrypoint and ensure it resolves to `artifacts.run_directory`.
-- Use paths relative to the campaign directory for campaign inputs.
-- Record exact full commits; do not assign a moving branch tip as review or test evidence.
-- List every required output and verification gate explicitly.
-- Grant only the permissions required by the assigned role.
-- Never include secrets, access tokens, private keys, or unredacted environment values.
-- Make `assignment.json` read-only to the Worker after dispatch. Corrections require cancellation and a new assignment or an explicitly versioned replacement.
-
-The Coordinator passes the assignment through three compatible channels:
-
-1. Create `<worktree>/.agent-artifacts` pointing to the campaign directory, or to the project artifact root for non-campaign work.
-2. Put the exact assignment path in the launch prompt: `Read .agent-artifacts/<run-path>/assignment.json before modifying code.`
-3. Optionally export `AGENT_ASSIGNMENT=.agent-artifacts/<run-path>/assignment.json`, `AGENT_ARTIFACT_ROOT=.agent-artifacts`, and `AGENT_RUN_DIR=.agent-artifacts/<run-path>` for CLI-based Workers.
-
-Do not rely on environment inheritance alone because remote, desktop, and delegated Agent runtimes may not preserve it. Do not paste large artifacts into the prompt; pass exact file paths and commits.
+- Use normalized absolute host-local paths for all directories, startup files, `inputs`, and `reviewed_runs[].manifest_file`. The current implementation supports POSIX paths used on Linux and macOS. Resolve remote execution paths explicitly before dispatch.
+- Discover `project.repository` from Git metadata. For code roles, `project.worktree` and `startup.working_directory` identify the assigned checkout; for artifact-only aggregation they may be the artifact root with `worktree: null`.
+- `scope` records campaign and variant IDs plus their exact directories. Standalone tasks set all scope fields to `null`; campaign-wide tasks set the variant fields to `null`.
+- `artifacts.entrypoint` is `.agent-artifacts` or `null`. Its target, when present, is always `artifacts.root_directory`. `run_path` is relative to that project root, not to the Campaign or Variant.
+- All `required_outputs` are paths relative to this run. Do not use `..`, absolute output paths, or escaped symlinks to represent outputs owned elsewhere.
+- `inputs` lists files the Worker must read, with campaign README/index, reference/acceptance files, current summary, applicable baseline, and Variant plan/preceding conclusions as appropriate to the role. The Coordinator makes them available before dispatch. Snapshot/version acceptance inputs when they could change during execution; do not silently change the assigned criteria.
+- `reviewed_runs` pins each reviewed terminal manifest by absolute path, run ID, and SHA-256. Audit assignments list the test/benchmark runs whose claims they assess. A code-only review may have an empty list if its scope says so; it cannot claim to audit measurements it did not inspect.
+- `git.base_commit` is the exact starting commit. Test, benchmark, review, and audit roles also require `git.target_commit`; their checkout starts at that target, which may differ from the implementation's original base. Only integration grants `merge`; read-only checking roles cannot modify implementation.
+- `permissions.additional_writable_paths` lists exact additional campaign documents owned by this Worker. Read access to the full Campaign remains available. Tools and temporary experiments are not restricted by a command allowlist.
+- `supersedes` is the absolute path to the prior run's manifest, or `null`. Never back-write a replacement pointer into an archived run.
+- Freeze the assignment, startup file, and protocol snapshot after dispatch. Corrections require a new assignment and run; never reinterpret an old execution under a revised contract.
+- Never include secrets or unredacted environment values.
 
 ### Worker Skill Bootstrap
 
-Creating a worktree does not transfer the Coordinator's conversation, activated skills, or local skill installation to a new Agent. The artifact symlink and assignment alone do not activate this protocol. Do not assume that starting an Agent in the worktree automatically loads the skill.
+A new Agent does not inherit the Coordinator's loaded skills or conversation. Before dispatch, the Coordinator must:
 
-Before dispatch, the Coordinator must:
-
-1. Copy the currently used skill package (`SKILL.md`, `templates/`, and `schemas/`) into the assigned external Run directory as `protocol/`. Preserve relative references and freeze this snapshot after dispatch. Do not copy credentials, Git metadata, or unrelated files.
-2. Render `templates/worker-start.md` into that Run as `worker-start.md`, replacing every placeholder with the exact worktree path and run-relative paths. This file identifies the Worker role, the protocol snapshot, and the immutable assignment. It is a bootstrap instruction, not a second assignment.
-3. Start the Worker at its assigned worktree root and include this instruction in its initial prompt: `Read .agent-artifacts/<run-path>/worker-start.md and follow its startup instructions before any task action.` Substitute the actual run path; never dispatch unresolved placeholders.
-4. For a manually started Agent, give the user the exact worktree directory and that same initial prompt. Starting a blank conversation is not a completed dispatch.
-5. Require the Worker to read the protocol snapshot and assignment and record their resolved paths plus the assignment ID in its preflight result before editing code.
-
-A native skill installation may be used additionally, but must not replace the explicit startup instruction or the frozen run snapshot. This fallback works through ordinary file reading and does not depend on a shared skill registry or inherited environment variables.
-
-If zero-prompt startup is required, first verify which project instruction file the selected Agent actually discovers. A short pointer to the exact `worker-start.md` may be placed there; do not assume Codex, Claude, Pi, and Herdr share discovery rules. Preserve all existing repository instructions. Do not overwrite tracked instruction files, hide tracked edits using Git flags, or change global Agent settings. If adding a new untracked instruction file, record Coordinator ownership, exclude its exact root-relative path locally, and remove it during cleanup only if its contents remain unchanged. If safe automatic discovery cannot be established, use the explicit initial prompt instead.
-
-When reusing a worktree for a later Run, stop the previous Worker first and update any Coordinator-owned startup pointer to the new exact Run. Never select an assignment through `latest`, a directory scan, or an ambiguous campaign-level default. If startup files are missing, unreadable, or inconsistent, stop before source edits and report the problem; do not silently fall back to an unrelated installed skill.
-
-### Ownership Transfer
-
-Use this single-writer sequence:
+1. Copy the current `SKILL.md`, `templates/`, `schemas/`, and `scripts/` into `<run_directory>/protocol/`. Freeze this run-local snapshot; omit Git metadata, credentials, and unrelated files.
+2. Render `templates/worker-start.md` as `startup.bootstrap_file`. Substitute every placeholder using the assignment: absolute contract/protocol/worktree/artifact paths, campaign/variant context, link mapping, required reading, and concrete output destinations. Use `not applicable` for absent campaign/variant/worktree/link fields. This is a view of the contract, not another source of authority.
+3. Put the read-first requirement in the launch prompt, not only inside the file the Worker has yet to read:
 
 ```text
-Coordinator writes assignment.json and pending manifest.json
-    -> Coordinator dispatches Worker
-    -> Worker verifies assignment and owns manifest.json
-    -> Coordinator reads only while Worker is active
-    -> Worker writes terminal manifest.json and report.md
-    -> Coordinator writes validation.json after Worker stops
+First read <absolute-assignment-file>, then <absolute-bootstrap-file>.
+Before task commands or file changes, read the required instructions and inputs,
+verify the directory/link mapping, and report the assignment ID, Campaign,
+Variant, Run, and exact output destinations. Do not guess replacement paths.
 ```
 
-The Coordinator owns `assignment.json` and `validation.json`. The active Worker owns its `manifest.json`, `report.md`, and run artifact directories. Neither may silently rewrite the other's owned files.
+4. Start the Worker in `startup.working_directory`. For manual startup, supply that exact directory and the same initial prompt. Environment variables are optional convenience only: `AGENT_ASSIGNMENT`, `AGENT_ARTIFACT_ROOT`, and `AGENT_RUN_DIR` must contain the assigned absolute paths.
+5. Read the Worker's startup acknowledgement and check it against the assignment before accepting its implementation handoff. File reads and read-only preflight probes are allowed during startup; source edits and experiments wait until preflight passes.
+
+Native skill discovery may supplement but never replace this explicit prompt. Preserve existing repository instructions; do not overwrite instruction files or global Agent settings. For reused worktrees, stop old producers first, retain the stable artifact-root link, and pass a new exact assignment path. Never find assignments by scanning for the newest run.
 
 ### Worker Preflight Handshake
 
-Before editing, the Worker must verify:
+The Worker first reads the assignment, bootstrap, frozen protocol, applicable repository instructions, and the required `inputs`. It must understand:
 
-- Current directory equals the assigned worktree root.
-- Current branch or detached commit matches the assignment.
-- The Git worktree root equals `project.worktree`, its shared Git metadata matches `project.repository`, and the base or target commit matches.
-- `.agent-artifacts` resolves to the assigned campaign directory, or project artifact root for non-campaign work.
-- The assigned `run_path` resolves to the declared external `run_directory`.
-- Required input files exist and are readable.
-- Requested actions fit the granted permissions.
+- Campaign: the shared Ascend operator goal, reference, baseline, and acceptance constraints.
+- Variant (`V`): a concrete approach/hypothesis within that Campaign; IDs are campaign-wide and do not denote agents or executions.
+- Run: this single assigned execution with its own role, commits, and durable evidence.
+- Other Variants and their prior failures are readable context; their files are not writable without ownership.
 
-The Worker then updates `manifest.json` from `pending` to `running` and records a `preflight` result. On mismatch, it must set the run to `failed` or `cancelled`, describe the mismatch, and avoid source changes.
+Then verify and acknowledge actual values, not merely "I have read the protocol":
 
-### Completion Handshake
+- Assignment ID, role, campaign/variant/run IDs, and the resolved assignment and protocol paths.
+- Working directory, worktree root, shared Git repository identity, and branch/base or detached target commit. For artifact-only aggregation, record the worktree/Git checkout checks as `not_applicable` with a reason.
+- Absolute artifact root, campaign directory, variant directory, run directory, and every required output destination.
+- Actual `.agent-artifacts` link and its resolved project root, or the declared absolute-path fallback when `entrypoint` is `null`.
+- Required inputs are readable, declared external destinations are writable, and no other active Worker owns the worktree.
 
-Before returning control, the Worker must:
+Record these observations in `manifest.preflight` with `status`, timestamp, and resolved paths. Only then change `pending` to `running`. On mismatch, record failure using a verified run path and stop before source changes; if even that destination is untrusted, report to the Coordinator without writing through the suspect link.
 
-- Set `manifest.status` to `completed`, `failed`, `cancelled`, or `superseded`.
-- Record the exact result commit when source changes were intended.
-- Complete `report.md` with verification, deviations, risks, unfinished work, and handoff.
-- Produce every required output or explicitly record why it is absent.
-- Leave shared summaries, merge state, branches, and worktree cleanup to authorized roles.
+### Ownership and Completion Handshake
 
-The Coordinator validates the terminal run and writes `validation.json` using `templates/validation.json` when available. Validation must cover assignment identity, role permissions, worktree and commit provenance, required outputs, verification evidence, manifest/report consistency, and cleanup readiness.
+```text
+Coordinator creates frozen contract/bootstrap/protocol and pending manifest
+    -> Worker reads, verifies, acknowledges, and owns active execution files
+    -> Worker explores freely within assigned source/ownership boundaries
+    -> Worker collects durable outputs, stops producers, and submits terminal files
+    -> Coordinator checks actual files and writes validation.json
+    -> Campaign decision owner considers verified tests/audits and accepts or rejects
+```
 
-If validation fails, preserve the original run unchanged. Create a new run and assignment with `supersedes` pointing to the failed or incomplete run. Do not reopen or overwrite archived execution history.
+The Worker may use scratch output during exploration. Before submission it must collect durable evidence, record the exact result commit, report unexecuted verification and missing outputs, and set execution status to `completed`, `failed`, or `cancelled`. `completed` means the assigned execution finished, not that tests passed or the Variant is accepted. The Worker cannot mark its own Coordinator validation passed. Only execution evidence is frozen at submission; the Coordinator subsequently adds its owned `validation.json` or termination record without altering Worker files.
+
+`validation.json` starts as `pending`. The Coordinator checks assignment identity, startup acknowledgement, ownership, actual output paths/files, evidence-to-commit provenance, manifest/report consistency, and stopped producers. Each check becomes `passed`, `failed`, or `not_applicable` with an explanation for exemptions. Overall status is `passed` only after every required check passes; otherwise it is `needs_repair`. A missing required output does not pass merely because it was explained. Cleanup readiness may be deferred with an explicit reason before audit/integration; repeat the recovery gate before deletion.
+
+Use the checker below for structural/path evidence, then review commands, test coverage, raw results, environment, and conclusions independently. The checker does not judge numerical correctness, audit independence, process termination, or business acceptance. This protocol is a handoff gate, not an OS sandbox or a command allowlist.
+
+A Worker reply cannot by itself close a task. Failed validation blocks acceptance, merge, and cleanup; a Coordinator may dispatch a repair or diagnostic run to the same Worker. Freeze the submitted run; new tests, evidence recovery, corrections, and retries use new runs referencing the old manifest through `supersedes`. Do not overwrite the original evidence. Before submission, an active Worker can fill in its own missing outputs in the same run.
+
+If the Worker crashes, confirm it and its child producers have stopped, revoke its ownership, preserve the partial files, and write a Coordinator-owned termination/validation record. Do not fabricate a Worker report or silently overwrite its unfinished manifest. Retry with a new run. No archival or cleanup while a producer might still write.
+
+### Executable Contract Checks
+
+Use the frozen package when checking an existing run:
+
+```bash
+uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/scripts/validate_contract.py <assignment.json>
+uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/scripts/validate_contract.py <assignment.json> --check-files
+uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/scripts/validate_contract.py <assignment.json> --manifest <manifest.json> --check-files
+```
+
+The first command validates schema and canonical path relationships. The second adds startup/link/input existence checks. The third also checks a terminal handoff's required outputs, evidence paths, reviewed manifest hashes, IDs, role, and commit consistency. Format checking is explicitly enabled and requires its optional dependencies. Templates contain intentional placeholders and are not dispatchable until populated.
 
 ## Standard Run Directory
 
-Every run directory must contain:
+Create the following files at their lifecycle stage: assignment/bootstrap/protocol at dispatch, manifest at creation, report at submission, and validation at Coordinator review. Optional evidence directories are created as needed:
 
 ```text
 <run-id>/
-├── assignment.json              # required for dispatched runs; immutable input
+├── assignment.json              # immutable dispatched input
+├── worker-start.md              # rendered startup instructions
+├── protocol/                    # frozen skill, schemas, templates, checker
 ├── manifest.json                # required machine-readable identity and status
 ├── report.md                    # required human-readable outcome
 ├── validation.json              # Coordinator completion gate
@@ -538,16 +538,15 @@ Never store credentials, tokens, private keys, personal data, or secret environm
 
 ## Run `manifest.json`
 
-Write `manifest.json` when the run is created and update it at meaningful state transitions. Use ISO 8601 timestamps with time zone. Use `null` when an optional value is not known; do not invent values.
+Use `templates/run-manifest.json` and `schemas/run-manifest.schema.json` for dispatched Worker runs. Coordinator orchestration records are separate and need not pretend to be Worker assignments. Record ISO 8601 timestamps with timezone, exact full Git commits, and `null` for unknown results.
 
-Minimum schema:
+Example (illustrative SHAs):
 
 ```json
 {
-  "schema_version": "1.0",
-  "run_id": "20260909-143012-codex-layernorm-tiling-01",
+  "schema_version": "2.0",
+  "run_id": "rmsnorm-01",
   "assignment_file": "assignment.json",
-  "task_id": "layernorm-tiling",
   "agent": {
     "name": "codex",
     "role": "implementation"
@@ -555,37 +554,62 @@ Minimum schema:
   "status": "completed",
   "preflight": {
     "status": "passed",
-    "checked_at": "2026-09-09T14:31:05+08:00"
+    "assignment_id": "V001-implementation-01",
+    "checked_at": "2026-09-21T10:01:00+08:00",
+    "assignment_file": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01/assignment.json",
+    "protocol_file": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01/protocol/SKILL.md",
+    "root_directory": "/projects/rmsnorm/agent-artifacts",
+    "run_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01",
+    "required_output_destinations": [
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01/manifest.json",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01/report.md",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01/tests/correctness.json",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/rmsnorm-01/patches/final.diff"
+    ],
+    "working_directory": "/projects/rmsnorm/worktrees/rmsnorm-01",
+    "repository": "/projects/rmsnorm/ascend-ops",
+    "worktree": "/projects/rmsnorm/worktrees/rmsnorm-01",
+    "campaign_id": "rmsnorm-01",
+    "campaign_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01",
+    "variant_id": "V001",
+    "variant_directory": "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001",
+    "run_id": "rmsnorm-01",
+    "artifact_link_target": "/projects/rmsnorm/agent-artifacts",
+    "read_inputs": [
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/README.md",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/manifest.json",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/reference/specification.md",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/reference/api-contract.md",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/reference/oracle.md",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/reference/acceptance.md",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/summary/status.md",
+      "/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/plan.md"
+    ]
   },
   "timestamps": {
-    "created_at": "2026-09-09T14:30:12+08:00",
-    "started_at": "2026-09-09T14:31:01+08:00",
-    "finished_at": "2026-09-09T15:18:44+08:00"
+    "created_at": "2026-09-21T10:00:00+08:00",
+    "started_at": "2026-09-21T10:01:00+08:00",
+    "finished_at": "2026-09-21T11:00:00+08:00"
   },
   "scope": {
-    "campaign_id": null,
-    "round_id": null,
-    "variant_id": null
+    "campaign_id": "rmsnorm-01",
+    "variant_id": "V001"
   },
   "git": {
-    "branch": "agent/codex/layernorm-tiling",
-    "worktree": "worktrees/codex-layernorm-tiling",
-    "base_commit": "<full-sha>",
-    "result_commit": "<full-sha>"
+    "branch": "dev/rmsnorm-01/v001-reference",
+    "base_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "target_commit": null,
+    "worktree": "/projects/rmsnorm/worktrees/rmsnorm-01",
+    "result_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   },
-  "outcome": {
-    "summary": "Implemented Ascend LayerNorm tiling changes.",
-    "tests": "passed",
-    "benchmarks": "not_run"
-  },
+  "reviewed_runs": [],
+  "result": null,
   "artifacts": [
-    "assignment.json",
     "report.md",
-    "tests/pytest.txt",
+    "tests/correctness.json",
     "patches/final.diff"
   ],
   "supersedes": null,
-  "superseded_by": null,
   "risks": [],
   "unfinished": []
 }
@@ -593,15 +617,65 @@ Minimum schema:
 
 Manifest requirements:
 
-- Use paths relative to the run directory in `artifacts`.
-- Ensure `assignment_file` identifies the immutable assignment used for this execution.
-- Record a successful preflight before source modification.
-- Prefer full commit SHAs for machine-readable fields.
-- Set `result_commit` only after intended source changes are committed.
-- Use `not_run`, not an implied pass, when verification was skipped.
-- Set `superseded_by` on the old run and `supersedes` on the replacement run.
-- Update `status` to `failed` or `cancelled` even when no code was produced.
-- Keep the manifest valid JSON; put prose in `report.md`.
+- Keep `assignment_file` fixed as `assignment.json`; IDs, role, scope, Git starting/target commits, and worktree match that contract.
+- `artifacts` and `result.evidence` contain run-relative paths. `reviewed_runs` contains absolute paths to the pinned input manifests from the assignment. References to other runs are inputs, not output files to duplicate.
+- `result_commit` identifies committed implementation/integration output. Read-only test/review roles use `target_commit` and leave `result_commit` null.
+- To claim verification of a result commit, test that clean commit or retain an exact source snapshot and prove it matches the recorded commit. Record command, source state, built binary provenance, environment, and raw outputs. Exploratory dirty-worktree measurements cannot silently become final-commit evidence.
+- Execution timestamps and terminal status are preserved. Archival, later decisions, and supersession live in Coordinator records/indexes; do not edit old manifests to set `superseded_by` or replace outcomes with `archived`.
+- Repeated execution creates a new run. Code changes invalidate applicability of earlier verdicts to the new commit; keep those verdicts as history.
+
+## Test, Benchmark, and Audit Results
+
+Keep three independent kinds of state:
+
+| Layer | Values | Owner and meaning |
+|---|---|---|
+| Run execution | `pending`, `running`, `completed`, `failed`, `cancelled` | Worker: did this execution finish? |
+| Verification result | Role-specific verdict below | Test/benchmark/audit Worker: what does the evidence establish? |
+| Variant decision | `accepted`, `rejected`, `needs_revision`, `superseded`, `final`, `cancelled` | Decision owner: should this exact implementation be adopted? |
+
+Coordinator validation (`pending`, `passed`, `needs_repair`) checks handoff completeness and provenance; it is neither a correctness verdict nor a Variant decision. A fully documented failing test can pass handoff validation while blocking Variant acceptance.
+
+Each test or audit has its own assignment, run, manifest, report, and raw evidence under `variants/VNNN/runs/<run-id>/`. The following are role-specific manifest fragments to merge into the common model, not standalone complete manifests:
+
+```json
+{
+  "agent": {"name": "tester", "role": "test"},
+  "status": "completed",
+  "git": {"target_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "result_commit": null},
+  "result": {
+    "verdict": "failed",
+    "passed": 118,
+    "failed": 2,
+    "skipped": 4,
+    "evidence": ["tests/results.json", "logs/test.log"]
+  }
+}
+```
+
+Test verdicts are `passed`, `failed`, or `inconclusive`. Test-case failures make the verdict `failed` even when the run completed normally. Infrastructure failure, insufficient coverage, or unavailable hardware must not imply a pass. Record `skipped` counts and gate-specific reasons; the acceptance contract decides whether skips are permissible. A test run that did not execute tests cannot pass.
+
+Benchmark verdicts are `valid`, `invalid`, or `inconclusive` and describe measurement validity, not whether latency meets the acceptance target. Preserve metrics, units, shapes, timing methodology, environment, and raw measurements in `result` and its evidence files.
+
+```json
+{
+  "agent": {"name": "auditor", "role": "audit"},
+  "status": "completed",
+  "git": {"target_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "result_commit": null},
+  "reviewed_runs": ["/projects/rmsnorm/agent-artifacts/campaigns/rmsnorm-01/variants/V001/runs/test-01/manifest.json"],
+  "result": {
+    "verdict": "invalid",
+    "blocking_findings": 1,
+    "evidence": ["findings.json", "report.md"]
+  }
+}
+```
+
+Review/audit verdicts are `valid`, `valid_with_caveats`, `invalid`, or `inconclusive`. Each finding has a stable ID, severity, claim, code/evidence references, and required follow-up. An audit pins reviewed terminal manifests by hash in its assignment; list the same absolute manifest paths in the result manifest. The target implementation's test/benchmark evidence must match `target_commit`. Baseline/comparison runs may use different commits and must be explicitly identified as comparisons in inputs/report rather than passed off as target evidence.
+
+Use an independent auditor for acceptance; implementation self-checks are useful evidence but do not satisfy independent audit. If that role is unavailable, record the gate as incomplete rather than silently self-approving.
+
+Only designated owners update Variant `result.md`, `audit.md`, `decision.md`, and its manifest. Each summary identifies the exact target commit and supporting runs; retain dated prior conclusions when revising it. If two runs disagree, show the disagreement until resolved. New tests/reviews never overwrite earlier run results, and an implementation update requires fresh applicable verification before acceptance.
 
 ## Run `report.md`
 
@@ -658,59 +732,47 @@ Do not paste huge logs into the report. Summarize them and reference raw artifac
 
 ## Operator Engineering Campaign Layout
 
-Use one durable directory per campaign:
-
 ```text
 agent-artifacts/campaigns/<campaign>/
-├── README.md
-├── manifest.json
-├── reference/
-│   ├── specification.md
-│   ├── api-contract.md
-│   ├── oracle.md
-│   ├── acceptance.md
-│   └── fixtures/
-├── baseline/                     # optional; required by some campaign types
-│   ├── environment.md
-│   ├── benchmark.json
-│   ├── benchmark.md
-│   ├── correctness.json
-│   └── profiling/
+├── README.md                    # goal and directory/context index
+├── manifest.json                # campaign state and Variant index
+├── reference/                   # specification, API, oracle, acceptance, fixtures
+├── baseline/                    # only when meaningful
 ├── variants/
-│   └── V001/
-│       ├── manifest.json
-│       ├── hypothesis.md
-│       ├── proposal.md
-│       ├── plan.md
-│       ├── implementation.md
-│       ├── result.md
-│       ├── audit.md
-│       └── decision.md
-├── runs/
-│   └── <run-id>/
-│       ├── assignment.json
-│       ├── worker-start.md
-│       ├── protocol/
-│       ├── manifest.json
-│       ├── report.md
-│       ├── tests/
-│       ├── logs/
-│       └── benchmarks/
+│   ├── V001/
+│   │   ├── manifest.json        # ancestry, comparisons, commit, run references
+│   │   ├── hypothesis.md
+│   │   ├── proposal.md
+│   │   ├── plan.md
+│   │   ├── implementation.md
+│   │   ├── result.md            # test/benchmark summary for exact commits
+│   │   ├── audit.md             # independent audit summary
+│   │   ├── decision.md
+│   │   └── runs/
+│   │       ├── <implementation-run-id>/
+│   │       ├── <test-run-id>/
+│   │       └── <audit-run-id>/
+│   └── V002/
+├── runs/                        # campaign-wide executions without a Variant
 └── summary/
     ├── status.md
     ├── timeline.md
     ├── comparison.md
     ├── decisions.md
-    └── final-report.md
+    └── final-report.md          # create only at closure
 ```
 
-Variants and runs are flat within their respective campaign directories. Round is metadata, not a required parent directory. Assignments record `scope.round_id` and campaign-unique `scope.variant_id`; variant manifests record their round and campaign-relative Run references. Keep `.agent-artifacts` mapped to the Campaign root, not a Variant or Run.
+Create only needed directories. The Campaign README/manifest lets a Worker discover the full Campaign; startup inputs identify the subset it must read. Historical raw logs can be opened on demand. Every new Variant run is nested under its Variant. The worktree link points to the project artifact root, never the directory shown above.
 
-Create directories only when needed. Preserve existing immutable runs and assignments at their original paths; do not migrate historical evidence. New runs use the flat layout. Validate legacy assignments using their retained protocol schema.
+`reference/` is required for every campaign. Establish `baseline/` only when comparison is meaningful. Do not invent baseline measurements for a new operator.
 
-`reference/` is required for every campaign. `baseline/` is required only when there is a meaningful existing behavior or performance point to compare against. Do not create fake baseline measurements for a genuinely new operator.
+### Compatibility with Existing Campaigns
 
-Do not create `final-report.md` until the campaign is closing. Historical round and variant records are append-only after their decisions, except for factual corrections that are explicitly noted.
+Version 2.0 removes Round and changes both the context-link target and canonical Variant run paths. Preserve historical assignments, runs, protocol snapshots, branches, and evidence at their original paths; use their retained schemas when interpreting them. Do not rename old records or rewrite embedded references.
+
+Before transitioning a worktree, stop all old Workers and their producers. Use a fresh worktree when old tasks are still active; never retarget their links. New work uses v2 contracts and paths. Index older variants/runs by explicit absolute references. Reserve all existing campaign-wide V IDs before allocating new ones; if legacy IDs were only unique within rounds, assign new campaign-wide Variant IDs for continued variants and retain an explicit legacy-to-new mapping. Legacy history is not retroactively renumbered.
+
+Variant summaries preserve dated decisions and factual corrections. Run execution evidence stays immutable after submission; campaign indexes record subsequent decisions and archival.
 
 ## Campaign Definition
 
@@ -762,7 +824,7 @@ Campaign `manifest.json` should include:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "campaign_id": "fused-rmsnorm-fp16-ascend910b",
   "title": "Fused RMSNorm FP16 Operator for Ascend 910B",
   "campaign_type": "new-development",
@@ -787,11 +849,10 @@ Campaign `manifest.json` should include:
     "commit": "<full-sha>",
     "readiness": "validation"
   },
-  "current_round": "R003",
-  "rounds": [
-    {"round_id": "R001", "status": "closed", "variant_ids": ["V001", "V002"]},
-    {"round_id": "R002", "status": "closed", "variant_ids": ["V003"]},
-    {"round_id": "R003", "status": "active", "variant_ids": ["V004"]}
+  "variants": [
+    "variants/V001/manifest.json",
+    "variants/V002/manifest.json",
+    "variants/V003/manifest.json"
   ]
 }
 ```
@@ -831,56 +892,19 @@ When a baseline applies, create and audit it before accepting comparative claims
 
 If the environment changes materially, either re-establish the baseline or mark cross-environment comparisons invalid.
 
-## Round Protocol
+## Variant Identity and Evolution
 
-A round represents one cycle of observation, competing attempts, and decision. It is not a single benchmark or commit.
+Allocate `V001`, `V002`, and subsequent IDs uniquely across the Campaign. A Variant owns one hypothesis or concrete approach, not a time window or a Worker. Store its descriptive mechanism in `name`; directory names remain stable `variants/VNNN/`.
 
-Round records live in the campaign manifest's `rounds` array, including `round_id`, status, and campaign-unique `variant_ids`. They do not require a directory. The current round analysis in `summary/status.md` must identify:
+Record `parent_variant` for the approach it evolved from, `base_commit` for the exact source starting point, and `comparison_variants` for alternatives it is measured against. Parentage is not the same as comparison. Use `null` for no parent and an empty list for no comparisons.
 
-- Starting commit and starting variant.
-- Current bottleneck and supporting evidence.
-- Question this round must answer.
-- Candidate mechanisms worth testing.
-- Reference contract and constraints inherited from the campaign.
+Several Variants and their runs may proceed concurrently. A retry, new measurement, or review creates a Run under the same Variant. A material change in hypothesis/design creates a new Variant assigned by the Coordinator. Refinements within the same hypothesis may produce a new commit under the existing Variant, but its earlier tests/audits do not certify that new commit.
 
-Use the following section in `summary/status.md` for the active round. At closure, the aggregator appends its findings to `summary/timeline.md` and its decision to `summary/decisions.md` before replacing the current snapshot:
-
-```markdown
-# Round RNNN — <Theme>
-
-## Starting Point
-
-- Variant:
-- Commit:
-- Headline metric:
-
-## Bottleneck
-
-Summarize the evidence.
-
-## Candidates
-
-| Variant | Idea | Correctness | Result | Decision |
-|---|---|---|---:|---|
-
-## Winner
-
-Name the selected variant and commit, or state `No winner`.
-
-## Learned
-
-Record reusable knowledge, including failed ideas.
-
-## Next Question
-
-State the bottleneck or uncertainty for the next round.
-```
-
-Close a round only after every started variant has a terminal decision or an explicit cancellation record.
+Campaign summaries can compare any set of Variants and record dated milestones without introducing a Round ID, shared "current run", or directory move.
 
 ## Variant Record Chain
 
-Every variant must contain this complete chain:
+Every implemented variant must preserve this record chain:
 
 ```text
 hypothesis
@@ -892,7 +916,7 @@ hypothesis
     -> decision
 ```
 
-Do not collapse these into one document. They represent distinct claims and make deviations auditable.
+Do not collapse these into one document. They represent distinct claims and make deviations auditable. For cancellation before implementation or a validation-only task, explicitly record unperformed stages as `not_applicable` with reasons; never fabricate implementation or results to fill a chain.
 
 ### `hypothesis.md`
 
@@ -992,7 +1016,7 @@ For optimization and refactor campaigns, compare against both the original basel
 
 ### `audit.md`
 
-Prefer an auditor who did not implement the variant. Audit:
+Use an auditor who did not implement the variant for an acceptance audit. Keep self-checks separate. Audit:
 
 - Correctness, numerical stability, determinism, undefined behavior, data races, and boundary cases.
 - Test coverage and input representativeness.
@@ -1015,12 +1039,12 @@ An attractive benchmark is not sufficient evidence of a valid operator. Function
 
 ### `decision.md`
 
-Every started variant must end with a decision:
+Every started variant must eventually have a terminal decision. `needs_revision` is an interim decision with a required follow-up, not closure:
 
 ```markdown
 # Decision
 
-Status: ACCEPTED | REJECTED | SUPERSEDED | FINAL | CANCELLED
+Status: ACCEPTED | REJECTED | NEEDS_REVISION | SUPERSEDED | FINAL | CANCELLED
 
 ## Reason
 
@@ -1051,18 +1075,17 @@ Maintain a compact machine-readable index alongside the narrative documents:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "variant_id": "V003",
   "name": "single-pass-vector-reduction",
   "status": "superseded",
   "campaign_id": "fused-rmsnorm-fp16-ascend910b",
-  "round_id": "R002",
-  "branch": "dev/fused-rmsnorm-fp16-ascend910b/r002-v003-single-pass-vector-reduction",
+  "branch": "dev/fused-rmsnorm-fp16-ascend910b/v003-single-pass-vector-reduction",
   "base_commit": "<full-sha>",
   "result_commit": "<full-sha>",
   "runs": [
-    "runs/20260909-143012-codex-single-pass-vector-reduction-01",
-    "runs/20260909-151820-claude-audit-01"
+    "runs/20260909-143012-codex-single-pass-vector-reduction-01/manifest.json",
+    "runs/20260909-151820-claude-audit-01/manifest.json"
   ],
   "requirements": {
     "specification": "passed",
@@ -1076,21 +1099,26 @@ Maintain a compact machine-readable index alongside the narrative documents:
   },
   "audit_verdict": "valid",
   "decision": "superseded",
-  "reason": "Meets the functional contract and target latency, but is superseded by a simpler accepted variant."
+  "reason": "Meets the functional contract and target latency, but is superseded by a simpler accepted variant.",
+  "parent_variant": "V001",
+  "comparison_variants": [
+    "V001",
+    "V002"
+  ]
 }
 ```
 
-All `runs` references in a variant manifest are relative to the Campaign root, not the variant directory. Narrative documents remain authoritative for reasoning. The manifest is the index for automation and dashboards.
+All `runs` references in a v2 Variant manifest are relative to that Variant directory and identify run manifests. Legacy runs elsewhere use explicit absolute references. Narrative documents remain authoritative for reasoning. The manifest is the index for automation and dashboards.
 
 ## Summary Protocol
 
-Treat `variants/` and `runs/` as evidence history and `summary/` as current campaign knowledge with append-only timeline and decision records. Only the designated aggregator updates shared summary files.
+Treat Variant runs and campaign-wide `runs/` as evidence history and `summary/` as current campaign knowledge with append-only timeline and decision records. Only the designated aggregator updates shared summary files.
 
 ### `summary/status.md`
 
 Keep it short enough to read first when resuming work. Include:
 
-- Campaign state and current round.
+- Campaign state, open questions, and active Variants.
 - Current best variant and exact commit.
 - Reference revision, acceptance status, current selection, target, and baseline or total gain when applicable.
 - Correctness and audit status.
@@ -1103,7 +1131,7 @@ Keep it short enough to read first when resuming work. Include:
 Append dated milestones:
 
 ```text
-timestamp | round | variant | event | commit | run | outcome
+timestamp | variant | event | commit | run | outcome
 ```
 
 Do not rewrite history to match the current conclusion.
@@ -1142,7 +1170,7 @@ Create only when the campaign is completed or explicitly closed. Include:
 - Goal, scope, constraints, and success criteria.
 - Reference specification, oracle, and acceptance criteria.
 - Baseline commit, environment, and measurements when applicable.
-- Engineering journey by round.
+- Engineering journey by Variant lineage and dated milestones.
 - Key accepted and rejected hypotheses.
 - Final implementation and exact commit.
 - Final correctness and audited performance.
@@ -1168,16 +1196,16 @@ agent/<agent>/<task-slug>
 Ascend operator campaign implementation:
 
 ```text
-dev/<campaign>/rNNN-vNNN-<variant-slug>
-opt/<campaign>/rNNN-vNNN-<variant-slug>
-port/<campaign>/rNNN-vNNN-<variant-slug>
-refactor/<campaign>/rNNN-vNNN-<variant-slug>
+dev/<campaign>/vNNN-<variant-slug>
+opt/<campaign>/vNNN-<variant-slug>
+port/<campaign>/vNNN-<variant-slug>
+refactor/<campaign>/vNNN-<variant-slug>
 ```
 
 Review or audit when a branch is required:
 
 ```text
-review/<campaign>/rNNN-vNNN-<scope>
+review/<campaign>/vNNN-<scope>
 ```
 
 Examples:
@@ -1185,10 +1213,10 @@ Examples:
 ```text
 agent/codex/layernorm-tiling
 agent/claude/aicore-audit
-dev/fused-rmsnorm-fp16-ascend910b/r001-v001-two-pass-reference
-opt/matmul-fp16-ascend910b/r003-v002-double-buffering
-port/layernorm-ascend910b/r002-v001-vector-core
-review/matmul-fp16-ascend910b/r003-v002-correctness
+dev/fused-rmsnorm-fp16-ascend910b/v001-two-pass-reference
+opt/matmul-fp16-ascend910b/v002-double-buffering
+port/layernorm-ascend910b/v001-vector-core
+review/matmul-fp16-ascend910b/v002-correctness
 ```
 
 ### Worktrees
@@ -1197,16 +1225,15 @@ Use a short readable name that maps to the branch:
 
 ```text
 <agent>-<task-slug>
-<campaign-short>-rNNN-vNNN
+<campaign-short>-vNNN
 review-<target-short>
 integration-<project-short>
 ```
 
-### Campaigns, Rounds, and Variants
+### Campaigns and Variants
 
 ```text
 campaign: <operator-or-area>-<dtype-or-target>
-round:    RNNN
 variant:  VNNN
 ```
 
@@ -1215,11 +1242,10 @@ Examples:
 ```text
 matmul-fp16-ascend910b
 flash-attention-ascend910b
-R003
 V002
 ```
 
-Allocate variant numbers uniquely across the Campaign; never restart numbering in a new Round. Store the mechanism in the manifest's `name` and use `variants/VNNN/` as its directory. Never rename a decided round or variant merely because priorities changed.
+Allocate Variant numbers uniquely across the Campaign; never reset or reuse them. Store the mechanism in the manifest's `name` and use `variants/VNNN/` as its directory. Never rename a Variant because priorities changed.
 
 ### Runs
 
@@ -1259,51 +1285,23 @@ Encode variant identity in the directory, not repeatedly in every filename.
 
 ## Status Machines
 
-Use only defined status values in manifests.
+Campaign: `proposed -> active`; active campaigns may pause/resume, complete, or abort. Completion requires all started Variants to have terminal decisions or explicit cancellation. Archive via an external record that preserves the terminal outcome.
 
-Campaign:
+Variant: `proposed -> planned -> implementing -> testing -> auditing`. A failed test or inconclusive audit can lead to `needs_revision`, then further implementation/testing/auditing with new runs. Any nonterminal state can be cancelled or rejected with rationale. `accepted` can later become `superseded` or `final` through a dated decision. Validation-only work may omit implementation with an explicit reason. `inconclusive` is a verification verdict, not a Variant terminal decision.
 
-```text
-proposed -> active -> paused -> active
-                  -> completed -> archived
-                  -> aborted -> archived
-```
+Run transitions:
 
-Round:
+| From | Allowed next execution states |
+|---|---|
+| `pending` | `running`, `failed`, `cancelled` |
+| `running` | `completed`, `failed`, `cancelled` |
+| `completed`, `failed`, `cancelled` | None; preserve this outcome and create a new Run for further execution |
 
-```text
-planned -> active -> decided -> closed
-                  -> cancelled
-```
+Coordinator validation is separate: `pending -> passed` or `pending -> needs_repair`. Repair of a submitted run gets its own execution and validation; the old record is retained. Archival and supersession are external metadata, not replacement execution statuses. When a Worker died before writing a terminal state, the Coordinator's termination record governs resumption without impersonating the Worker.
 
-Variant:
+Worktree: `created -> active -> completed -> removed`, with integration or abandonment recorded when applicable. Completed test/audit worktrees need not be merged. Remove only after stopped producers, successful recovery checks, and authorized cleanup.
 
-```text
-proposed -> planned -> implementing -> testing -> auditing
-                                             ├-> accepted -> superseded
-                                             │           -> final
-                                             ├-> rejected
-                                             ├-> cancelled
-                                             └-> inconclusive
-```
-
-Run:
-
-```text
-pending -> running -> completed -> archived
-                  ├-> failed -> archived
-                  ├-> cancelled -> archived
-                  └-> superseded -> archived
-```
-
-Worktree:
-
-```text
-created -> active -> completed -> merged -> removed
-                         └-> abandoned -> removed
-```
-
-Do not skip directly to a success state without the required evidence. `accepted` means the variant passed its decision gate; `final` means it is the selected campaign result.
+`accepted` means the exact Variant commit passed its decision gate; `final` means it is the selected campaign result. No status may imply success without required evidence.
 
 ## End-to-End Lifecycle
 
@@ -1315,20 +1313,20 @@ The Coordinator follows this sequence for a code-changing task:
 4. Create the branch and worktree from an explicit commit.
 5. Create the durable run directory, immutable `assignment.json`, and pending `manifest.json`.
 6. Add the repository-local exclude rule, link `.agent-artifacts/`, and verify both the ignore rule and assigned run path.
-7. Freeze the run-local protocol snapshot, render `worker-start.md`, and start the Worker from its assigned worktree root with an explicit prompt to read that bootstrap.
+7. Freeze the run-local protocol snapshot, render `worker-start.md`, and start the Worker with absolute paths and an explicit prompt to read the assignment first, then the bootstrap.
 8. Require the Worker preflight handshake before source modification.
 9. Let the Worker implement only within the assigned scope and record deviations.
-10. Let the Worker run correctness tests, benchmarks, and profiling and save raw evidence.
-11. Require the Worker to commit intended changes and finalize `manifest.json` and `report.md`.
+10. Let the Worker explore, test, benchmark, and profile freely; retain temporary experiments and collect durable evidence at handoff.
+11. Commit intended changes, verify claims against that exact source state, stop producers, and submit `manifest.json` and `report.md`.
 12. Validate the terminal run and write `validation.json`.
 13. Review or audit the exact result commit from a separate worktree when required.
 14. Make and record the accept, reject, supersede, or cancel decision.
 15. Merge through the designated integration path when accepted.
 16. Let the aggregator update shared summaries.
 17. Verify recoverability, then clean up the disposable worktree and eligible branch.
-18. Archive the run without rewriting its evidence and release Coordinator ownership.
+18. Record archival outside the immutable run and release Coordinator ownership.
 
-For any Ascend operator campaign, establish the reference package before step 2 and create the appropriate round and variant records before implementation. Establish a baseline only when the campaign type requires a meaningful comparison point.
+For any Ascend operator campaign, establish the reference package and Variant records after acquiring ownership in step 2 and before implementation. Establish a baseline only when the campaign type requires a meaningful comparison point.
 
 ## Concurrency and Ownership
 
@@ -1345,8 +1343,7 @@ Assign one writer per mutable file or namespace:
 | Variant result | Result owner or designated benchmark agent |
 | Variant audit | Independent auditor |
 | Variant decision | Campaign decision owner |
-| Round metadata in campaign manifest | Coordinator |
-| Round analysis and closure records in summary | Single aggregator using round-owner evidence |
+| Campaign Variant index and identity allocation | Coordinator |
 | Shared summary files | Single aggregator |
 | Integration branch | Integrator |
 
@@ -1358,13 +1355,13 @@ When multiple agents need the same code base, give each a separate worktree even
 
 Before removing a worktree, verify:
 
-- Intended changes are committed, or an explicit recovery patch is stored.
+- Every result, including rejected work, remains recoverable through a durable Git ref/bundle or a verified recovery patch with its base and required untracked/binary content. A SHA alone is not retention.
 - `manifest.json` records final status, base commit, and result commit when present.
 - `report.md` records verification, risks, and unfinished work.
 - Required raw test, benchmark, and profiling artifacts are durable outside the worktree.
 - The decision or cancellation reason is recorded.
 - No untracked user files or valuable local state remain.
-- The worktree is not the current directory of a live agent or process.
+- The Worker and all child producers have stopped; the worktree is not used by a live agent or process.
 - Accepted work is merged or its exact commit remains reachable.
 
 Then remove the worktree with Git's worktree command. Prune stale metadata only after inspecting it. Delete a branch only when it is merged, rejected with preserved evidence, or explicitly authorized. Never use destructive reset or forced deletion as routine cleanup.
@@ -1386,17 +1383,17 @@ Include or adapt this block when dispatching Codex, Claude, Pi, Herdr, or anothe
 ```markdown
 ## Worktree and Artifact Protocol
 
-You own exactly one assigned Git worktree and one run directory.
+You own one run directory and, for code-based roles, one assigned Git worktree.
 
-- Read the exact `worker-start.md` supplied in the launch prompt, then its run-local protocol snapshot and `.agent-artifacts/<run-path>/assignment.json` before taking any task action.
+- First read the exact absolute `assignment.json` and `worker-start.md` supplied in the launch prompt, then the frozen protocol and required inputs before task actions.
 - Treat the assignment as immutable and authoritative.
 - Complete the preflight handshake before modifying source.
 - Start and remain at the assigned worktree root for code operations.
 - Confirm the expected branch or detached commit before editing.
 - Do not modify another agent's worktree, branch, run directory, or summary files.
-- Use `.agent-artifacts/` to read applicable campaign context.
-- Write durable execution evidence only through the assigned `.agent-artifacts/<run-path>/` directory.
-- Required run files are `.agent-artifacts/<run-path>/manifest.json` and `.agent-artifacts/<run-path>/report.md`.
+- Use the stable project-root `.agent-artifacts/` link to discover Campaigns and read applicable context; never retarget it.
+- Use the immutable absolute `artifacts.run_directory` for durable output and pass it explicitly to child processes; collect scratch evidence before submission.
+- Required run files include `<run_directory>/manifest.json` and `<run_directory>/report.md`; complete every output in the assignment.
 - Store raw evidence under `logs/`, `tests/`, `benchmarks/`, `profiling/`, `patches/`, `attachments/`, or `environment/`.
 - Do not commit raw execution artifacts unless explicitly requested.
 - Record the base commit before work and the result commit after committing intended changes.
@@ -1408,7 +1405,7 @@ You own exactly one assigned Git worktree and one run directory.
 For Ascend operator campaign work, append:
 
 ```markdown
-This run is Huawei Ascend operator work and belongs to the specified Campaign, Round, and Variant. Confirm the assigned Ascend hardware and CANN or framework target, then read the campaign README, reference package, applicable baseline, current `summary/status.md`, round analysis, and the variant's preceding record documents before acting. Preserve the chain `hypothesis -> proposal -> plan -> implementation -> result -> audit -> decision`. Raw evidence belongs in the run directory; conclusions belong in the variant documents. For new development, validate specification, oracle, Ascend integration, and acceptance targets. For optimization or refactoring, also compare valid results against the original baseline and current selection. Do not invent an inapplicable baseline. Do not accept your own result unless decision authority is explicitly assigned.
+This run is Huawei Ascend operator work and belongs to the specified Campaign and Variant. Confirm the assigned Ascend hardware and CANN or framework target, then read the campaign README, reference package, applicable baseline, current `summary/status.md`, campaign Variant index, and the variant's preceding record documents before acting. Preserve the chain `hypothesis -> proposal -> plan -> implementation -> result -> audit -> decision`. Raw evidence belongs in the run directory; conclusions belong in the variant documents. For new development, validate specification, oracle, Ascend integration, and acceptance targets. For optimization or refactoring, also compare valid results against the original baseline and current selection. Do not invent an inapplicable baseline. Do not accept your own result unless decision authority is explicitly assigned.
 ```
 
 Tool-specific launch commands may differ, but the protocol and ownership rules do not.
@@ -1466,7 +1463,7 @@ When joining an existing project or campaign:
 
 1. Rediscover the actual project container, primary repository, worktrees, and durable `agent-artifacts/` root from the existing layout and Git metadata, without assuming fixed directory names.
 2. Read repository instructions and inspect active worktrees.
-3. For campaigns, read `README.md`, `manifest.json`, the reference package, applicable baseline documents, `summary/status.md`, `summary/decisions.md`, and the current round.
+3. For campaigns, read `README.md`, `manifest.json`, the reference package, applicable baseline documents, `summary/status.md`, `summary/decisions.md`, and the active Variant index.
 4. Inspect the target variant and all prior documents in its record chain.
 5. Read relevant run manifests and reports; open raw artifacts only as needed.
 6. Verify branch and commit identities before continuing.
@@ -1481,7 +1478,9 @@ Do not report completion until all applicable checks pass:
 - [ ] Agent operated in the assigned worktree root.
 - [ ] Exactly one Coordinator owned the project or campaign coordination scope.
 - [ ] Every dispatched run retained its immutable `assignment.json`.
-- [ ] Worker preflight verified paths, commits, artifact resolution, inputs, and permissions.
+- [ ] Worker read the contract first and acknowledged Campaign/Variant/Run identity, exact output paths, commits, link resolution, inputs, and permissions.
+- [ ] The worktree link stayed at the project artifact root; child producers used the immutable absolute run directory.
+- [ ] Execution status, test/audit verdict, Coordinator validation, and Variant decision remain distinct.
 - [ ] Parallel writers used separate worktrees and branches.
 - [ ] Repository-local Git metadata ignores `.agent-artifacts`; no global Git configuration was changed.
 - [ ] Durable artifacts are outside disposable worktrees.

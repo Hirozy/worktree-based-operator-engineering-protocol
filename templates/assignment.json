@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "2.0",
   "assignment_id": "replace-me",
   "created_at": "1970-01-01T00:00:00Z",
   "coordinator": {
@@ -19,16 +19,23 @@
     "target_commit": null
   },
   "scope": {
-    "campaign_id": null,
-    "campaign_directory": null,
-    "round_id": null,
-    "variant_id": null
+    "campaign_id": "replace-me",
+    "campaign_directory": "/absolute/path/to/project/agent-artifacts/campaigns/replace-me",
+    "variant_id": "V001",
+    "variant_directory": "/absolute/path/to/project/agent-artifacts/campaigns/replace-me/variants/V001"
   },
   "artifacts": {
+    "root_directory": "/absolute/path/to/project/agent-artifacts",
     "run_id": "replace-me",
     "entrypoint": ".agent-artifacts",
-    "run_path": "runs/replace-me",
-    "run_directory": "/absolute/path/to/project/agent-artifacts/runs/replace-me"
+    "run_path": "campaigns/replace-me/variants/V001/runs/replace-me",
+    "run_directory": "/absolute/path/to/project/agent-artifacts/campaigns/replace-me/variants/V001/runs/replace-me"
+  },
+  "startup": {
+    "working_directory": "/absolute/path/to/project/worktrees/replace-me",
+    "assignment_file": "/absolute/path/to/project/agent-artifacts/campaigns/replace-me/variants/V001/runs/replace-me/assignment.json",
+    "bootstrap_file": "/absolute/path/to/project/agent-artifacts/campaigns/replace-me/variants/V001/runs/replace-me/worker-start.md",
+    "protocol_file": "/absolute/path/to/project/agent-artifacts/campaigns/replace-me/variants/V001/runs/replace-me/protocol/SKILL.md"
   },
   "inputs": [],
   "required_outputs": [
@@ -36,11 +43,13 @@
     "report.md"
   ],
   "verification": [],
+  "reviewed_runs": [],
   "permissions": {
     "modify_source": true,
     "merge": false,
     "remove_worktree": false,
-    "update_summary": false
+    "update_summary": false,
+    "additional_writable_paths": []
   },
   "supersedes": null
 }

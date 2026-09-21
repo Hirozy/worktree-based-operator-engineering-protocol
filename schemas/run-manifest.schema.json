@@ -1,0 +1,556 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "assignment_file",
+    "agent",
+    "status",
+    "preflight",
+    "timestamps",
+    "scope",
+    "git",
+    "reviewed_runs",
+    "result",
+    "artifacts",
+    "supersedes",
+    "risks",
+    "unfinished"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "run_id": {
+      "$ref": "#/$defs/id"
+    },
+    "assignment_file": {
+      "const": "assignment.json"
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "role"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "$ref": "#/$defs/role"
+        }
+      }
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "preflight": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pending",
+            "passed",
+            "failed"
+          ]
+        }
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "created_at",
+        "started_at",
+        "finished_at"
+      ],
+      "properties": {
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finished_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_id",
+        "variant_id"
+      ],
+      "properties": {
+        "campaign_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "variant_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/variant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch",
+        "worktree",
+        "base_commit",
+        "target_commit",
+        "result_commit"
+      ],
+      "properties": {
+        "branch": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "worktree": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/absolute"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "base_commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "target_commit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/commit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result_commit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/commit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "reviewed_runs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/absolute"
+      },
+      "uniqueItems": true
+    },
+    "result": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "verdict"
+          ],
+          "properties": {
+            "verdict": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/relative"
+              },
+              "uniqueItems": true
+            },
+            "passed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "skipped": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "blocking_findings": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relative"
+      },
+      "uniqueItems": true
+    },
+    "supersedes": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/absolute"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "unfinished": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Worker Run Manifest v2",
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "variant": {
+      "type": "string",
+      "pattern": "^V[0-9]{3,}$"
+    },
+    "absolute": {
+      "type": "string",
+      "pattern": "^/(?!$)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\x00\\n\\r]+$"
+    },
+    "relative": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\x00\\n\\r\\\\]+$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "role": {
+      "enum": [
+        "implementation",
+        "test",
+        "benchmark",
+        "review",
+        "audit",
+        "integration",
+        "aggregation"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "agent": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "test"
+                ]
+              }
+            }
+          },
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "required": [
+              "verdict",
+              "evidence",
+              "passed",
+              "failed",
+              "skipped"
+            ],
+            "properties": {
+              "verdict": {
+                "enum": [
+                  "passed",
+                  "failed",
+                  "inconclusive"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/relative"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "passed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "skipped": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "git": {
+            "properties": {
+              "target_commit": {
+                "$ref": "#/$defs/commit"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "agent": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "benchmark"
+                ]
+              }
+            }
+          },
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "required": [
+              "verdict",
+              "evidence"
+            ],
+            "properties": {
+              "verdict": {
+                "enum": [
+                  "valid",
+                  "invalid",
+                  "inconclusive"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/relative"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            }
+          },
+          "git": {
+            "properties": {
+              "target_commit": {
+                "$ref": "#/$defs/commit"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "agent": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "review",
+                  "audit"
+                ]
+              }
+            }
+          },
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "required": [
+              "verdict",
+              "evidence",
+              "blocking_findings"
+            ],
+            "properties": {
+              "verdict": {
+                "enum": [
+                  "valid",
+                  "valid_with_caveats",
+                  "invalid",
+                  "inconclusive"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/relative"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "blocking_findings": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "git": {
+            "properties": {
+              "target_commit": {
+                "$ref": "#/$defs/commit"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "preflight": {
+            "properties": {
+              "status": {
+                "const": "passed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          },
+          "agent": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "implementation",
+                  "integration"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "git": {
+            "properties": {
+              "result_commit": {
+                "$ref": "#/$defs/commit"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

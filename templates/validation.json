@@ -1,23 +1,27 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "assignment_id": "replace-me",
   "run_id": "replace-me",
   "validated_by": {
     "name": "replace-me",
     "role": "coordinator"
   },
-  "validated_at": "replace-with-iso-8601-timestamp",
-  "status": "passed",
+  "validated_at": null,
+  "status": "pending",
   "checks": {
-    "assignment_identity": "passed",
-    "role_permissions": "passed",
-    "worktree_provenance": "passed",
-    "commit_provenance": "passed",
-    "required_outputs": "passed",
-    "verification_evidence": "passed",
-    "manifest_report_consistency": "passed",
-    "cleanup_readiness": "passed"
+    "assignment_identity": "pending",
+    "startup_acknowledgement": "pending",
+    "role_permissions": "pending",
+    "worktree_provenance": "pending",
+    "artifact_locations": "pending",
+    "commit_provenance": "pending",
+    "required_outputs": "pending",
+    "verification_evidence": "pending",
+    "manifest_report_consistency": "pending",
+    "producer_termination": "pending",
+    "cleanup_readiness": "pending"
   },
   "issues": [],
-  "next_action": "replace-me"
+  "next_action": "replace-me",
+  "evidence": []
 }

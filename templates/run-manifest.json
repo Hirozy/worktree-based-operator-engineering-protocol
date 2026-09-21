@@ -1,0 +1,35 @@
+{
+  "schema_version": "2.0",
+  "run_id": "replace-me",
+  "assignment_file": "assignment.json",
+  "agent": {
+    "name": "replace-me",
+    "role": "implementation"
+  },
+  "status": "pending",
+  "preflight": {
+    "status": "pending"
+  },
+  "timestamps": {
+    "created_at": null,
+    "started_at": null,
+    "finished_at": null
+  },
+  "scope": {
+    "campaign_id": null,
+    "variant_id": null
+  },
+  "git": {
+    "branch": "replace-me",
+    "worktree": "/absolute/path/to/project/worktrees/replace-me",
+    "base_commit": "replace-with-full-sha",
+    "target_commit": null,
+    "result_commit": null
+  },
+  "reviewed_runs": [],
+  "result": null,
+  "artifacts": [],
+  "supersedes": null,
+  "risks": [],
+  "unfinished": []
+}
