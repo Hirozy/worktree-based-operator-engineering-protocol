@@ -119,14 +119,14 @@ Coordinator
 
 ```text
 <project-container>/
-├── <primary-worktree-name>/       # 现有主工作树；实际名称通过发现获得
-├── worktrees/                    # 可清理的工作树
+├── <primary-worktree-name>/       # existing primary worktree; discovered name
+├── worktrees/                    # disposable worktrees
 │   ├── codex-layernorm-tiling/
 │   ├── claude-aicore-review/
 │   └── matmul-ascend910b-v002/
-└── agent-artifacts/              # 持久、共享，位于工作树之外
-    ├── runs/                     # 非专题执行
-    └── campaigns/                # 算子工程专题
+└── agent-artifacts/              # durable shared artifacts outside worktrees
+    ├── runs/                     # standalone runs
+    └── campaigns/                # operator campaigns
 ```
 
 默认顶层产物目录只有 `campaigns/` 和独立任务的 `runs/`。按需创建目录，禁止预先生成空目录骨架。需要项目级汇总或协调时，`summary/` 和 `registry/` 是可选扩展。
@@ -547,19 +547,19 @@ uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/script
 
 ```text
 <run-id>/
-├── assignment.json              # 不可变的派发输入
-├── worker-start.md              # 已填充的启动说明
-├── protocol/                    # 冻结的 Skill、schema、模板和校验器
-├── manifest.json                # 必需的机器可读身份与状态
-├── report.md                    # 必需的人类可读结果报告
-├── validation.json              # 编排者完成验收
-├── logs/                        # 命令、构建、profiler 和运行日志
-├── tests/                       # 测试输出与正确性证据
-├── benchmarks/                  # 原始性能数据与汇总
-├── patches/                     # 复现或恢复补丁
-├── profiling/                   # profiler 原生文件与导出文件
-├── attachments/                 # 截图或辅助文件
-└── environment/                 # 环境与依赖快照
+├── assignment.json              # immutable dispatched input
+├── worker-start.md              # rendered startup instructions
+├── protocol/                    # frozen skill, schemas, templates, checker
+├── manifest.json                # machine-readable identity and status
+├── report.md                    # human-readable outcome report
+├── validation.json              # Coordinator completion gate
+├── logs/                        # command, build, profiler, runtime logs
+├── tests/                       # test output and correctness evidence
+├── benchmarks/                  # raw benchmark data and summaries
+├── patches/                     # reproducibility or recovery patches
+├── profiling/                   # profiler-native files and exports
+├── attachments/                 # screenshots or supporting files
+└── environment/                 # environment and dependency snapshots
 ```
 
 仅创建需要的可选目录，并统一使用以上名称。原始数据与结论必须分开保存。
@@ -778,32 +778,32 @@ Manifest 要求：
 
 ```text
 agent-artifacts/campaigns/<campaign>/
-├── README.md                    # 目标、目录和上下文索引
-├── manifest.json                # 专题状态与方案索引
-├── reference/                   # 规格、API、正确性依据、验收标准、测试夹具
-├── baseline/                    # 仅在有意义时建立
+├── README.md                    # goal and context index
+├── manifest.json                # campaign state and Variant index
+├── reference/                   # specification, API, oracle, acceptance, fixtures
+├── baseline/                    # only when meaningful
 ├── variants/
 │   ├── V001/
-│   │   ├── manifest.json        # 演进关系、对比对象、commit 和执行引用
+│   │   ├── manifest.json        # lineage, comparisons, commits, run references
 │   │   ├── hypothesis.md
 │   │   ├── proposal.md
 │   │   ├── plan.md
 │   │   ├── implementation.md
-│   │   ├── result.md            # 针对精确 commit 的测试/性能汇总
-│   │   ├── audit.md             # 独立审计汇总
+│   │   ├── result.md            # test/benchmark summary for exact commits
+│   │   ├── audit.md             # independent audit summary
 │   │   ├── decision.md
 │   │   └── runs/
 │   │       ├── <implementation-run-id>/
 │   │       ├── <test-run-id>/
 │   │       └── <audit-run-id>/
 │   └── V002/
-├── runs/                        # 不归属具体方案的专题级执行
+├── runs/                        # campaign-wide runs without a Variant
 └── summary/
     ├── status.md
     ├── timeline.md
     ├── comparison.md
     ├── decisions.md
-    └── final-report.md          # 仅在收尾时创建
+    └── final-report.md          # created only at campaign closure
 ```
 
 按需创建目录。专题 README/manifest 帮助执行者发现完整专题，启动输入明确其中必须读取的部分。历史原始日志可按需打开。每个新方案执行都嵌套在其方案目录下。工作树链接指向项目产物根目录，禁止指向上图中的专题目录。
@@ -1546,14 +1546,14 @@ Agent 可读取其他执行和方案的产物，但禁止静默重写。通过�
 牢记八项不变量：
 
 ```text
-每个并发代码写入 Agent -> 一个工作树
-每次执行              -> 一个 Run
-每个协调范围          -> 一名活跃编排者
-每个被派发执行者      -> 一份不可变合约
-工作树                -> 可清理的代码环境
-agent-artifacts       -> 持久证据与知识
-manifest.json         -> 执行与 Git 状态的来源关联
-唯一汇总者            -> 无并发写冲突的共享汇总
+one concurrent code-writing Agent -> one Worktree
+one execution                     -> one Run
+one coordination scope            -> one active Coordinator
+one dispatched Worker             -> one immutable Assignment
+Worktree                          -> disposable code environment
+agent-artifacts                   -> durable evidence and knowledge
+manifest.json                     -> run-to-Git provenance
+single Aggregator                 -> conflict-free shared summaries
 ```
 
 本协议用于保留可信、可复用的记录：修改了什么、如何验证、结论为何可信、哪些思路失败，以及后续 Agent 如何在已有证据上继续工作，避免重复丢失的尝试。

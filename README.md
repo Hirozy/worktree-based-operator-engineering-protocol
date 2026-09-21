@@ -23,27 +23,27 @@
 默认顶层目录为 `campaigns/` 和独立任务的 `runs/`，均按需创建：
 
 ```text
-agent-artifacts/                         # 所有 .agent-artifacts 链接的固定目标
+agent-artifacts/                         # fixed target for every .agent-artifacts link
 ├── campaigns/
 │   └── <campaign-id>/
-│       ├── README.md                    # 目标与目录索引
+│       ├── README.md                    # goal and directory index
 │       ├── manifest.json
 │       ├── reference/
-│       ├── baseline/                    # 有适用基线时创建
+│       ├── baseline/                    # create when applicable
 │       ├── variants/
 │       │   └── V001/
-│       │       ├── manifest.json        # parent_variant、comparison_variants、commit
+│       │       ├── manifest.json        # parent_variant, comparison_variants, commit
 │       │       ├── plan.md
-│       │       ├── result.md            # 引用测试/性能 Run 的结论
-│       │       ├── audit.md             # 引用独立审计 Run 的结论
+│       │       ├── result.md            # conclusions from test/benchmark Runs
+│       │       ├── audit.md             # conclusions from independent audit Runs
 │       │       ├── decision.md
 │       │       └── runs/
 │       │           ├── <implementation-run-id>/
 │       │           ├── <test-run-id>/
 │       │           └── <audit-run-id>/
-│       ├── runs/                        # 不属于具体 V 的专题级任务
+│       ├── runs/                        # campaign-wide tasks without a Variant
 │       └── summary/
-└── runs/                                # 不属于 Campaign 的独立任务
+└── runs/                                # standalone tasks outside a Campaign
 ```
 
 v2 移除 Round 的目录、字段和状态。V 表示一个具体方案/假设，在 Campaign 内唯一编号、不重置、不复用；Run 表示一次执行，重测、复审和重试都创建新 Run。方案演进由 `parent_variant` 和精确 `base_commit` 表示，对比对象由 `comparison_variants` 表示。
