@@ -293,7 +293,8 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(0, validator.main([str(self.run / "assignment.json"), "--manifest", str(self.run / "manifest.json"), "--check-files"]))
 
     def test_document_examples_match_schemas(self):
-        examples = [json.loads(block) for block in re.findall(r"```json\n(.*?)\n```", (ROOT / "SKILL.md").read_text(), re.S)]
+        examples = [json.loads(block) for block in re.findall(r"```json\n(.*?)\n```", (ROOT / "references/legacy-v2.md").read_text(), re.S)]
+        self.assertTrue(examples)
         for data in examples:
             if "assignment_id" in data:
                 self.assertEqual([], validator.validate_assignment(data))

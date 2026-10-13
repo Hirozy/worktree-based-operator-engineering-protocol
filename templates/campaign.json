@@ -1,0 +1,9 @@
+{
+  "schema_version": "lightweight-1",
+  "campaign_id": "replace-me",
+  "objective": "replace-me",
+  "status": "active",
+  "decisions": [],
+  "variants": [],
+  "runs": []
+}

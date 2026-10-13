@@ -1,63 +1,40 @@
 # Worktree-Based Operator Engineering Protocol
 
-一个面向华为昇腾算子工程的可复用 Skill，通过统一的 Git worktree 协作协议，协调 Codex、Claude Code、Pi、Herdr 等编程 Agent。
+面向华为昇腾算子工程的轻量多 Agent 协作 Skill：隔离代码工作区，持久保存实验产物，支持多 Variant、多次执行与状态追踪。
 
-## 功能
+## 默认工作方式
 
-- 仅适用于明确面向华为昇腾硬件或 CANN 软件栈的算子开发、优化、移植、验证、基准测试和审计任务。
-- 为每个修改昇腾算子代码的 Agent 分配独立的 Git worktree，避免并行开发时发生工作区冲突。
-- 定义编排者（Coordinator）角色，统一管理 worktree、执行记录（Run）、权限及生命周期状态转换。
-- 将 Coordinator 的同步职责限定为创建 worktree、Campaign/Variant/Run 结构、任务合同、约定和产物布局；初始化完成后返回 `ready`，不等待 CANN 环境、baseline 或 Worker 执行。
-- 根据 Git 元数据和现有布局自动识别主仓库的实际目录，不要求目录名为 `repo`，也不重命名现有工作区。
-- 使用不可变的任务合同 `assignment.json`，向执行者（Worker）传递准确的路径、提交、输入、输出和产物位置。
-- 要求 Worker 执行启动前检查，并由 Coordinator 通过 `validation.json` 记录任务完成验收。
-- 将所有 worktree 的 `.agent-artifacts` 固定映射到项目产物根目录；合约单独绑定绝对 Run 路径，任务切换不改变链接目标。
-- 由 Coordinator 直接维护仓库本地的 `.agent-artifacts` Git 忽略规则，不修改全局 Git 配置。
-- 要求 Agent 在各自分配的 worktree 根目录启动。
-- 将 `manifest.json`、`report.md`、测试、日志、基准测试数据、性能分析数据和补丁保存在临时 worktree 之外的共享 `agent-artifacts/` 区域。
-- 将 Worktree 与 Run 分离建模，确保临时工作区删除后，执行历史仍可追溯。
-- 使用 `Project > Campaign > Variant > Run > Artifact`（项目 > 专题 > 方案 > 执行 > 产物）层级组织昇腾算子开发、优化、移植、重构和验证工作。
-- 统一规范规格说明、正确性判定依据、验收标准、假设、提案、计划、实现、结果、审计、决策和最终报告。
+- 只有 Coordinator 与 Worker 两类职责；实现、测试、benchmark、审查是任务类型。
+- 优先复用合适的隔离工作区，不重复管理宿主创建的 worktree。
+- 每个 Campaign 一个状态索引，每个 Variant 一份方案说明，每个 Run 两份交接文档。
+- 同一 Worker 可完成实现、自测和测量；不为每一步新建角色或执行。
+- 所有方案 Run 归属 Variant，不设置额外轮次层级。
+- 产物位于 worktree 外，失败和中断证据同样保留，清理工作树不会清理实验历史。
+- 仅用于昇腾硬件或 CANN 算子工程，不用于通用软件开发或仅面向其他后端的任务。
 
-## 产物目录
-
-默认顶层目录为 `campaigns/` 和独立任务的 `runs/`，均按需创建：
+## 目录
 
 ```text
-agent-artifacts/                         # fixed target for every .agent-artifacts link
-├── campaigns/
-│   └── <campaign-id>/
-│       ├── README.md                    # goal and directory index
-│       ├── manifest.json
-│       ├── reference/
-│       ├── baseline/                    # create when applicable
-│       ├── variants/
-│       │   └── V001/
-│       │       ├── manifest.json        # parent_variant, comparison_variants, commit
-│       │       ├── plan.md
-│       │       ├── result.md            # conclusions from test/benchmark Runs
-│       │       ├── audit.md             # conclusions from independent audit Runs
-│       │       ├── decision.md
-│       │       └── runs/
-│       │           ├── <implementation-run-id>/
-│       │           ├── <test-run-id>/
-│       │           └── <audit-run-id>/
-│       ├── runs/                        # campaign-wide tasks without a Variant
-│       └── summary/
-└── runs/                                # standalone tasks outside a Campaign
+agent-artifacts/
+└── campaigns/<campaign>/
+    ├── campaign.json
+    ├── README.md
+    ├── baseline/                   # 按需
+    └── variants/V001/
+        ├── proposal.md
+        └── runs/<run-id>/
+            ├── task.md
+            ├── result.md
+            └── ...                 # 真实测试、日志、性能数据等
 ```
 
-v2 移除 Round 的目录、字段和状态。V 表示一个具体方案/假设，在 Campaign 内唯一编号、不重置、不复用；Run 表示一次执行，重测、复审和重试都创建新 Run。方案演进由 `parent_variant` 和精确 `base_commit` 表示，对比对象由 `comparison_variants` 表示。
+campaign.json 由 Coordinator 单独更新，记录 Campaign/Variant/Run 状态、关联和决策。
+Worker 只写自己的执行产物。Run 完成不表示测试通过或方案已被接受。
+同一 Variant 可多次执行，Run 固定归属一个 Variant；新测量不覆盖旧结果。
 
-Worker 可读取完整 Campaign 的上下文，启动时必读文件列入合约 `inputs`。持久产物写入合约给定的绝对 `run_directory`，并将该路径显式传给子进程。Worker 仍可自由使用 shell、编译器、profiler 和临时脚本；交接前须归档支持结论的证据。
-
-测试和审计使用独立的 Run，绑定精确 `target_commit`。审计合约还记录被审查 Run 的 manifest 路径和摘要。`completed` 仅表示执行结束，不能代替测试通过、审计有效或方案被接受。Coordinator 检查真实文件后记录 `validation.json`；缺少证据时不能合并或清理。
-
-Coordinator 的同步初始化在按需创建 worktree、Campaign/Variant/Run 目录与索引、任务合同、协议快照、启动引导、产物结构和上下文链接，通过合约校验及 `--check-files` 检查并核对初始 manifest 后结束。`ready` 是报告或回复中的初始化交接标记，不是 manifest 的新增状态；Run 的 `status` 和 `preflight.status` 保持 `pending`。仅请求创建时，返回实际路径、commit、合约和启动引导位置及待执行事项，不启动或等待 Worker，也不要求终态报告或测试结果。
-
-Coordinator 不检查或准备 CANN、驱动、固件、硬件、编译器和运行时环境，也不执行 baseline、测试、构建或 profiling；这些工作由后续被授权的执行者完成。缺少必需参考资料时，先为准备任务创建合约，资料就绪后再派发依赖它们的实现任务。已有本地仓库、校验依赖可用且无需等待外部服务时，初始化目标为 1–5 分钟，复杂仓库以 10 分钟以内为目标；这不是实测保证。超过 15 分钟必须报告当前步骤、实际耗时及已知阻塞原因，不得跳过检查。
-
-已有历史记录保留原路径和协议，不自动迁移。切换旧 worktree 前必须结束旧 Worker 及子进程；仍有任务运行时使用新 worktree，不能重定向旧链接。版本 2.0 的合约和校验器不用于直接解释旧版合同。
+保留现行映射：worktree 内的 `.agent-artifacts` 指向项目 `agent-artifacts/` 根目录，
+不是专题或 Run。任务给出绝对产物路径，Git 忽略只配置在仓库本地。
+已有历史合同、路径和映射不自动迁移。
 
 ## 安装
 
@@ -73,56 +50,38 @@ npx skills add https://github.com/Hirozy/worktree-based-operator-engineering-pro
 npx skills add https://gitcode.com/Hirozy/worktree-based-operator-engineering-protocol.git
 ```
 
-## 使用方法
+## 使用
 
-在支持 Agent Skills 的工具中调用此 Skill：
+在支持 Agent Skills 的工具中调用：
 
 ```text
 $worktree-based-operator-engineering-protocol
 ```
 
-然后描述需要完成的昇腾算子实现、优化、移植、验证、基准测试或审计任务。通用软件开发任务，或仅面向非昇腾后端的算子任务，不应调用此 Skill。
+描述目标、昇腾后端、约束及是否需要并行比较。例如：
 
-### 新 Agent 的启动引导
+> 比较这个昇腾算子的两种优化方案。分别在隔离工作树实现，保留正确性和性能证据，
+> 同一 NPU 上串行测量，记录比较结论；未经确认不合并或删除工作树。
 
-新建 worktree 不会继承主 Agent 已加载的 Skill。Coordinator 必须在执行 Run 中保存协议快照 `protocol/`，并根据模板生成 `worker-start.md`，明确指定协议和任务合同的位置。
+新 Worker 的初始提示必须明确读取 task.md 的绝对路径。
+不依赖空白会话自动发现 Skill，不再默认创建 worker-start 或复制全量协议。
+只请求准备工作区时，返回路径和任务入口，不自动开始执行。
 
-按合约指定的目录启动 Agent，并发送以下首条指令（替换为具体绝对路径）：
+## 按需能力与兼容
 
-```text
-首先读取 <assignment.json 的绝对路径>，再读取 <worker-start.md 的绝对路径>。
-在执行任务命令或修改文件前，阅读协议和必读输入，核实目录与链接结构，
-回报 assignment、Campaign、Variant、Run 身份及全部产物的准确目标路径。
-完成启动前检查后再执行任务；有不一致时报告，不猜测替代路径。
-```
+- references/experiments.md：实验身份、索引、状态、恢复与所有权。
+- references/benchmarking.md：正确性与性能证据、环境和设备隔离。
+- references/strict-audit.md：显式启用旧版严格合同与验收。
+- references/legacy-v2.md：保留的旧协议，普通 Worker 不加载。
+- templates/task.md、result.md、proposal.md、campaign.json：轻量模板。
 
-自动启动时，由 Coordinator 将同样的指令作为初始提示传入。不要依赖空白会话自动发现 Skill；不同 Agent 的原生发现机制需单独确认。
+旧 JSON 合同模板、schema、校验脚本和测试保留为严格模式及历史兼容用途。
+它们不适用于 lightweight-1 索引，普通任务不需要安装校验依赖。
+独立审查不自动触发严格模式。现阶段没有新增调度框架、状态服务或工具依赖。
 
-## 校验
-
-模板含占位符，必须先填写实际路径、完整 commit、身份及验收要求。以下命令中的 `<protocol>` 为本仓库或 Run 内冻结的协议快照路径：
+## 开发验证
 
 ```bash
-# 合约结构与路径关系
-uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/scripts/validate_contract.py <assignment.json>
-# 派发前检查已有目录、链接、输入和启动文件
-uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/scripts/validate_contract.py <assignment.json> --check-files
-# 提交后检查必需产物、证据路径、身份及 commit 一致性
-uv run --no-project --with 'jsonschema[format]==4.26.0' python <protocol>/scripts/validate_contract.py <assignment.json> --manifest <manifest.json> --check-files
-# 在本仓库运行回归测试
+python3 -m unittest discover -s tests -p 'test_lightweight.py' -v
 uv run --no-project --with 'jsonschema[format]==4.26.0' python -m unittest discover -s tests -v
 ```
-
-校验器只读文件，不限制 Worker 的执行工具，也不自动接管编排。它检查结构、路径、输入摘要和合约/manifest 一致性；Coordinator 负责检查 Git 来源、文件和交接完整性，测试、基准测试和审计角色负责精度、性能方法、环境和结论。Coordinator 不执行 CANN 或环境探测。将校验放入交接流程，才能阻止不合格结果进入合并和清理。
-
-## 文件说明
-
-- `SKILL.md`：完整协作协议与执行指令。
-- `templates/assignment.json`：v2 Worker 任务合同。
-- `templates/worker-start.md`：合约优先读取、目录结构、身份和产物定位引导。
-- `templates/run-manifest.json`：执行状态与结果记录模板。
-- `templates/validation.json`：Coordinator 完成验收记录，默认待检查。
-- `schemas/assignment.schema.json`：合同结构与角色约束。
-- `schemas/run-manifest.schema.json`：Run 身份、执行状态和角色结果结构。
-- `scripts/validate_contract.py`：只读合约与交接校验器。
-- `tests/test_contract.py`：路径隔离、角色结果、历史输入和异常情况测试。
