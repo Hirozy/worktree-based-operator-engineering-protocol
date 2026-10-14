@@ -79,9 +79,9 @@ npx skills add https://gitcode.com/Hirozy/worktree-based-operator-engineering-pr
 
 Agent 启动时先用 Git 元数据识别位置：在任务 worktree（包括子目录）默认作为 Worker，
 在主仓库或已确认的项目容器默认作为 Coordinator。任务入口缺失时询问，不自动转为编排者。
-Coordinator 根据 templates/project-context.md 在主仓库上层生成项目 AGENTS.md，
+用户明确要求时，Coordinator 根据 templates/project-context.md 在主仓库上层生成项目 AGENTS.md，
 简述主仓库、worktrees、agent-artifacts 的作用；保留已有说明，共享父目录需先确认作用范围。
-宿主不自动读取上层说明时，仍通过启动提示传入必要路径。
+上层说明仅解释布局，不作为启动依赖；不为注入 Worker 身份修改项目自带的指令文件。
 
 在支持 Agent Skills 的工具中调用：
 
@@ -94,7 +94,10 @@ $worktree-based-operator-engineering-protocol
 > 比较这个昇腾算子的两种优化方案。分别在隔离工作树实现，保留正确性和性能证据，
 > 同一 NPU 上串行测量，记录比较结论；未经确认不合并或删除工作树。
 
-新 Worker 的初始提示必须明确读取 task.md 的绝对路径。
+Coordinator 根据 templates/worker-prompt.md 输出准确启动目录和一段已填充的提示词，
+包含 Worker 身份、目标环境可读的 SKILL.md 与 task.md 绝对路径。
+用户手动启动 Agent 并粘贴提示；Coordinator 不自动启动 Agent。
+尚未分配任务或路径不确定时先补齐信息，不输出含占位符的启动提示，也不假装 Worker 已运行。
 不依赖空白会话自动发现 Skill，不再默认创建 worker-start 或复制全量协议。
 只请求准备工作区时，返回路径和任务入口，不自动开始执行。
 
@@ -104,6 +107,7 @@ $worktree-based-operator-engineering-protocol
 - references/directory-context.md：当前目录识别、角色选择和上层说明的安全生成。
 - references/benchmarking.md：正确性与性能证据、环境和设备隔离。
 - templates/task.md、result.md、proposal.md、campaign.json：轻量模板。
+- templates/worker-prompt.md：Coordinator 输出给用户手动粘贴的启动提示，不复制成每个 Run 的文件。
 
 只保留轻量流程。独立审查仍作为 Worker 任务执行，不引入另一套合同或状态系统。
 不依赖 jsonschema、uv、调度框架或状态服务。

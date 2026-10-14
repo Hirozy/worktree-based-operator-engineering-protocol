@@ -31,7 +31,8 @@ git worktree list --porcelain
 ## Worker 的上下文入口
 
 - 默认不执行 Coordinator 的创建后询问、分配身份、维护共享索引或新建工作树流程。
-- 读取用户或启动提示指定的 task.md；核实其工作树、源码与 Run。
+- 用户将 Coordinator 提供的提示粘贴到新会话后，Worker 读取提示指定的 Skill 和 task.md；
+  项目原有说明仍需正常读取，不修改其内容。核实工作树、源码与 Run。
 - 没有 task 时，可只读查看已存在的 .agent-artifacts/README.md，理解工作树用途，
   但 Campaign 上下文不等于具体执行授权。
 - 没有明确任务入口时询问用户或 Coordinator 提供准确 task 路径或分配任务；
@@ -40,7 +41,8 @@ git worktree list --porcelain
 
 ## 上层目录说明
 
-Coordinator 在已确认的 project-container/AGENTS.md 中使用 project-context 模板。
+上层说明是可选的布局文档，不是 Worker 的启动注入方式。
+仅用户明确要求时，Coordinator 在已确认的 project-container/AGENTS.md 中使用 project-context 模板。
 替换真实主仓库名称、绝对路径与工作树根目录；不要留下占位符。
 若文件不存在，确认父目录安全且有写权限后创建；存在则读取并保留原内容，
 只追加或更新明确标记为本项目的说明块，冲突时询问，不重写无关指令。
@@ -49,4 +51,5 @@ Coordinator 在已确认的 project-container/AGENTS.md 中使用 project-contex
 说明必须限定在识别出的仓库及其注册 worktree，不能只凭“位于子目录”选择 Worker。
 真实 Git 状态与文档不一致时报告，不把旧文档当成创建或接管工作区的授权。
 这份说明由 Coordinator 写一次并按布局变化维护，不为每个 Run 复制。
-若宿主不读取上层 AGENTS.md，显式提供说明路径；不能保证所有 Agent 自动发现它。
+Worker 启动始终由 Coordinator 输出准确目录及已填充的 worker-prompt，用户手动粘贴。
+不修改工作树内原有 AGENTS.md 或其他项目指令文件；不保证空白会话自动发现 Skill。

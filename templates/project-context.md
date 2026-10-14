@@ -21,7 +21,8 @@
 
 ## Worker 启动
 
-先读启动提示给出的 task.md 绝对路径，核实任务和产物目录。
+由用户粘贴 Coordinator 提供的启动提示，再读其中明确的 SKILL.md 和 task.md，
+核实任务和产物目录；本说明不代替手动启动提示，不修改项目原有指令文件。
 已确认创建 Campaign 时，工作树的 .agent-artifacts 指向该 Campaign；
 其中 README.md 解释工作树用途，variants/<variant>/runs/<run>/ 保存执行记录。
 没有明确 task 时请求分配；不自行创建 Campaign、Run 或另一个 worktree，

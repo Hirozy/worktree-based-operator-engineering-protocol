@@ -82,6 +82,20 @@ class LightweightTests(unittest.TestCase):
         self.assertIn("不适用于同一父目录下的其他项目", template)
         self.assertIn("包括子目录", template)
 
+    def test_worker_start_uses_manual_prompt(self):
+        skill = (ROOT / "SKILL.md").read_text()
+        prompt = (ROOT / "templates/worker-prompt.md").read_text()
+        self.assertIn("由用户启动 Agent 后粘贴", skill)
+        self.assertIn("Run 保持 pending", skill)
+        self.assertIn("不自动启动 Agent", skill)
+        self.assertIn("禁止为了 Worker 启动创建或修改项目的", skill)
+        self.assertIn("你是本次昇腾算子任务的 Worker。", prompt)
+        self.assertNotIn("不是 Coordinator", prompt)
+        self.assertLessEqual(len(prompt.splitlines()), 10)
+        self.assertIn("<worker-accessible-skill-md-absolute-path>", prompt)
+        self.assertIn("<task-md-absolute-path>", prompt)
+        self.assertIn("项目原有说明", prompt)
+
     def test_only_lightweight_protocol_is_shipped(self):
         skill = (ROOT / "SKILL.md").read_text()
         self.assertNotIn("legacy-v2.md", skill)
