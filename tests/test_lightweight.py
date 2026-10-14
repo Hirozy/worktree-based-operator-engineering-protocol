@@ -47,6 +47,30 @@ class LightweightTests(unittest.TestCase):
         for field in ("主仓库", "项目容器", "工作树根目录", "产物根目录"):
             self.assertIn(field, task)
 
+    def test_campaign_creation_requires_confirmation(self):
+        skill = (ROOT / "SKILL.md").read_text()
+        self.assertIn("每次新建 worktree 成功后，主动询问", skill)
+        self.assertIn("等待用户明确答复", skill)
+        self.assertIn("basename 为 campaign_id（不是分支名）", skill)
+        self.assertIn("选择否或尚未答复", skill)
+        self.assertIn("同名 Campaign 已存在", skill)
+        self.assertIn("<project-container>/agent-artifacts/campaigns/<worktree-name>/", skill)
+        self.assertNotIn("不得改指向 Campaign", skill)
+        self.assertIn("不预建 Variant、Run", skill)
+
+    def test_worktree_purpose_is_asked_and_persisted(self):
+        skill = (ROOT / "SKILL.md").read_text()
+        for requirement in (
+            "如果用户没有说明该 worktree 的用途，追加询问",
+            "已有明确用途时不重复问",
+            "先确认是否需要创建",
+            "`.agent-artifacts/README.md` 的“工作树用途”节",
+            "`campaign.json.objective`",
+            "不擅自改写专题总目标",
+            "明确尚未落盘",
+        ):
+            self.assertIn(requirement, skill)
+
     def test_default_does_not_load_legacy_protocol(self):
         skill = (ROOT / "SKILL.md").read_text()
         self.assertNotIn("legacy-v2.md", skill)

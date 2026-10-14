@@ -7,6 +7,8 @@
 - 项目容器：<主仓库父目录的绝对路径>
 - 工作树根目录：<项目容器>/worktrees
 - 产物根目录：<项目容器>/agent-artifacts
+- Campaign 目录：<产物根目录>/campaigns/<已确认的 Campaign ID>
+- 上下文入口：<工作树>/.agent-artifacts → <Campaign 目录>
 - 工作树：<绝对路径>
 - 基础 commit：<完整 SHA>
 - 固定验证目标：<如适用，完整 SHA>
@@ -26,6 +28,7 @@
 
 先核实工作区、源码起点、输入和产物真实路径；不一致时停止并报告。
 核实 worktrees、agent-artifacts 与主仓库平级，任务工作树位于 worktrees 下；
+核实上下文入口指向已确认的 Campaign，而非项目产物根目录或具体 Run；
 不符合时报告布局冲突，除非用户已明确授权例外，不自行另建或迁移目录。
 持久证据写入上述产物目录，并向产出文件的子进程传入准确路径。
 不修改其他 Run 或共享 campaign.json；不覆盖旧执行，不自动提交、合并或清理。

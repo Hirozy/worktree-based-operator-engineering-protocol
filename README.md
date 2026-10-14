@@ -49,8 +49,16 @@ campaign.json 由 Coordinator 单独更新，记录 Campaign/Variant/Run 状态�
 Worker 只写自己的执行产物。Run 完成不表示测试通过或方案已被接受。
 同一 Variant 可多次执行，Run 固定归属一个 Variant；新测量不覆盖旧结果。
 
-保留现行映射：worktree 内的 `.agent-artifacts` 指向项目 `agent-artifacts/` 根目录，
-不是专题或 Run。任务给出绝对产物路径，Git 忽略只配置在仓库本地。
+创建 worktree 后，Coordinator 主动询问是否创建同名 Campaign，等待明确答复。
+用户未说明 worktree 用途时，追加询问用途和目标；已有明确说明则不重复问。
+确认创建或复用 Campaign 后，将用途写入 `.agent-artifacts/README.md` 的“工作树用途”节，
+新专题同时填写 `campaign.json.objective`；复用专题不擅自改写其总目标。
+未确认 Campaign 时不为记录用途偷偷创建目录；未授权创建 worktree 时先确认创建意图。
+选择是：以工作树实际目录名创建 `agent-artifacts/campaigns/<worktree-name>/`，
+初始化 campaign.json 和 README.md，并将 worktree 内的 `.agent-artifacts` 链接到该 Campaign。
+选择否或未答复：只保留工作树，不创建 Campaign 或链接，不启动实验。
+同名专题已存在时先询问是否复用；链接冲突不覆盖。Variant 与 Run 在实际实验时按需创建。
+任务给出绝对产物路径，Git 忽略只配置在仓库本地。
 已有历史合同、路径和映射不自动迁移。
 
 ## 安装

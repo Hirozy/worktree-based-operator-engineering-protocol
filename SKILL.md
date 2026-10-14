@@ -86,6 +86,30 @@ Coordinator 在分配实验产物或创建工作树前执行以下检查：
 报告冲突并取得用户明确布局选择；禁止静默退回主仓库内创建。
 发现旧产物放错位置时不自动移动、删除或重定向链接，先给出迁移方案并确认没有活跃写入者。
 
+## 创建后确认 Campaign
+
+每次新建 worktree 成功后，主动询问：“是否为此 worktree 创建同名 Campaign，并链接到其 .agent-artifacts？”
+等待用户明确答复；不能将创建 worktree 的授权视为创建 Campaign 的授权。
+如果用户没有说明该 worktree 的用途，追加询问：“这个 worktree 用来做什么？希望完成什么目标？”
+可与 Campaign 确认一起询问；已有明确用途时不重复问，也不从目录名推测用途。
+创建 worktree 本身仍须获得授权；用户未表达创建意图时，先确认是否需要创建，不能先创建再补问。
+- 选择是：以实际工作树目录的 basename 为 campaign_id（不是分支名），在
+  `artifact_root/campaigns/<worktree-name>/` 创建 Campaign，填充 campaign.json 与 README.md。
+  仅写已知目标和身份，未知目标标为待确认；不预建 Variant、Run 或虚构结果。
+  将 `<worktree>/.agent-artifacts` 链接到该 Campaign，验证解析后的真实目标及本地忽略规则。
+  收到用途答复后，在 `.agent-artifacts/README.md` 的“工作树用途”节记录实际工作树名称、
+  绝对路径、用户说明的用途和目标；新 Campaign 的 `campaign.json.objective` 同步记录目标。
+  复用 Campaign 时只补充对应工作树的用途，不擅自改写专题总目标或覆盖其他工作树记录。
+  用途未答复时标为待确认并保留问题，不猜测目标、不启动实验。
+- 选择否或尚未答复：只保留已创建的工作树，不创建 Campaign、链接、Variant 或 Run，不启动实验。
+  已收到的用途可在回复中保留，明确尚未落盘；不能为了写用途而暗中创建 Campaign 或实体 .agent-artifacts 目录。
+- 同名 Campaign 已存在：说明冲突，询问是否复用；确认身份与所有权后才链接，禁止覆盖已有内容。
+- 链接已存在且目标一致时复用；目标不同或入口为真实目录/文件时，报告冲突，不覆盖或重定向。
+  历史映射调整须另行授权且确认旧 Worker 与产物生成进程已停止。
+
+只请求创建时，此确认及可选 Campaign 初始化就是交付终点；不自动派发 Worker。
+复用已有工作树时沿用明确分配的 Campaign，不重复创建；未分配时先确认，再开始实验。
+
 ## 持久目录
 
 ```text
@@ -103,16 +127,17 @@ agent-artifacts/
                 └── ...                 # 真实日志、测试、测量与补丁
 ```
 
-只创建当前需要的目录。单方案任务使用一个 Campaign、一个 Variant。
+用户确认 Campaign 后，只创建当前需要的目录。开始单方案实验时使用一个 Campaign、一个 Variant。
 沿用已有专题，不因换 Agent 或重开会话重复创建。
 Campaign 内 Variant ID 唯一；同一方案持续迭代时保持身份。
 每个 Run 固定归属一个 Variant；多次迭代以独立 Run 记录，不增加轮次实体。
 独立辅助操作无需伪造方案或 Run；其结论由 Coordinator 记入专题 README。
 需要可追溯的测试或测量则归属被验证方案的 Run。
 
-现有链接语义保持：
-`<worktree>/.agent-artifacts -> <project-container>/agent-artifacts/`。
-不得改指向 Campaign、Variant 或 Run；现有历史链接不自动迁移或重定向。
+新建 Campaign 的链接语义：
+`<worktree>/.agent-artifacts -> <project-container>/agent-artifacts/campaigns/<worktree-name>/`。
+入口指向 Campaign 根目录，不是项目产物根目录、Variant 或 Run；历史链接不自动迁移或重定向。
+例如任务文件通过 `.agent-artifacts/variants/V001/runs/<run-id>/task.md` 访问。
 通过 Git 元数据解析仓库本地 excludes 文件，幂等加入 `/.agent-artifacts` 并验证忽略结果。
 不修改全局 Git 配置，不覆盖真实目录或已跟踪入口；冲突时先报告。
 无法使用链接时直接传绝对路径。链接只是访问入口，不是权限或任务发现机制。
@@ -140,8 +165,8 @@ Campaign 内 Variant ID 唯一；同一方案持续迭代时保持身份。
 
 ## 执行与交接
 
-1. Coordinator 先确认项目级平级布局，再建立或复用专题，确定当前问题、方案及 Run，登记 pending。
-2. 创建 task 与工作区；仅请求准备环境时报告路径并停止，不启动实验。
+1. Coordinator 确认项目级平级布局，创建或复用工作区；新建后完成 Campaign 询问与可选初始化。
+2. 仅请求准备环境时报告路径并停止；获准执行且 Campaign 已确认后，确定方案及 Run、登记 pending 并创建 task。
 3. Worker 核实后由 Coordinator 登记 running，开始授权任务。
 4. 测试与测量尽量直接输出到外部 Run；临时文件可留工作区，但交接前收集必需证据。
 5. Worker 在 result 中记录源码状态、命令、结论、证据路径、失败及未执行项。
