@@ -59,7 +59,7 @@ Worker 只写自己的执行产物。Run 完成不表示测试通过或方案已
 选择否或未答复：只保留工作树，不创建 Campaign 或链接，不启动实验。
 同名专题已存在时先询问是否复用；链接冲突不覆盖。Variant 与 Run 在实际实验时按需创建。
 任务给出绝对产物路径，Git 忽略只配置在仓库本地。
-已有历史合同、路径和映射不自动迁移。
+已有实验产物、路径和映射不删除或自动迁移；不再提供旧版合同兼容。
 
 ## 安装
 
@@ -77,6 +77,12 @@ npx skills add https://gitcode.com/Hirozy/worktree-based-operator-engineering-pr
 
 ## 使用
 
+Agent 启动时先用 Git 元数据识别位置：在任务 worktree（包括子目录）默认作为 Worker，
+在主仓库或已确认的项目容器默认作为 Coordinator。任务入口缺失时询问，不自动转为编排者。
+Coordinator 根据 templates/project-context.md 在主仓库上层生成项目 AGENTS.md，
+简述主仓库、worktrees、agent-artifacts 的作用；保留已有说明，共享父目录需先确认作用范围。
+宿主不自动读取上层说明时，仍通过启动提示传入必要路径。
+
 在支持 Agent Skills 的工具中调用：
 
 ```text
@@ -92,21 +98,18 @@ $worktree-based-operator-engineering-protocol
 不依赖空白会话自动发现 Skill，不再默认创建 worker-start 或复制全量协议。
 只请求准备工作区时，返回路径和任务入口，不自动开始执行。
 
-## 按需能力与兼容
+## 按需能力
 
 - references/experiments.md：实验身份、索引、状态、恢复与所有权。
+- references/directory-context.md：当前目录识别、角色选择和上层说明的安全生成。
 - references/benchmarking.md：正确性与性能证据、环境和设备隔离。
-- references/strict-audit.md：显式启用旧版严格合同与验收。
-- references/legacy-v2.md：保留的旧协议，普通 Worker 不加载。
 - templates/task.md、result.md、proposal.md、campaign.json：轻量模板。
 
-旧 JSON 合同模板、schema、校验脚本和测试保留为严格模式及历史兼容用途。
-它们不适用于 lightweight-1 索引，普通任务不需要安装校验依赖。
-独立审查不自动触发严格模式。现阶段没有新增调度框架、状态服务或工具依赖。
+只保留轻量流程。独立审查仍作为 Worker 任务执行，不引入另一套合同或状态系统。
+不依赖 jsonschema、uv、调度框架或状态服务。
 
 ## 开发验证
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_lightweight.py' -v
-uv run --no-project --with 'jsonschema[format]==4.26.0' python -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -v
 ```

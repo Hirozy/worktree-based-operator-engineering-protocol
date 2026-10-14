@@ -14,6 +14,17 @@ description: "仅用于华为昇腾硬件或 CANN 软件栈的算子开发、优
 后端不明确时先确认；不将本 Skill 用作通用 worktree 管理工具。
 遵守用户授权和仓库说明；Skill 不授予自动提交、推送、合并或删除权限。
 
+## 启动时识别位置与角色
+
+先按 [目录识别](references/directory-context.md) 用 Git 元数据识别当前位置，再选择职责。
+在已注册的任务 worktree 根目录或其子目录中，自动作为 Worker；切到该工作树根目录执行。
+不因缺少任务文件或 Campaign 就转为 Coordinator，不自行创建另一个 worktree 或重建实验。
+在已确认的项目容器或主仓库中默认作为 Coordinator；位置未知或有歧义时先询问，不修改文件。
+用户明确指定的职责优先，但不会自动授予共享文件、其他工作区或 Git 操作的权限。
+Coordinator 建立布局后，按 `templates/project-context.md` 在主仓库上层的项目容器创建或安全补充
+`AGENTS.md`，写明目录作用、真实路径和角色规则；不覆盖已有说明，不将规则扩散到无关项目。
+上层说明是否自动加载取决于宿主；派发提示仍须显式提供 task.md 和必要说明的绝对路径。
+
 ## 两类职责
 
 | 职责 | 工作 |
@@ -23,7 +34,7 @@ description: "仅用于华为昇腾硬件或 CANN 软件栈的算子开发、优
 
 实现、测试、审计、集成是任务类型，不是额外角色。
 Coordinator 同时负责汇总，不为维护文档单独启动 Agent。
-简单串行任务可由同一个 Agent 兼任；并行时必须明确当前写入者。
+简单串行任务可由明确承担编排职责的 Agent 兼任；任务 worktree 内默认只作为 Worker。
 一个 Worker 可在一个 Run 内实现、测试和测量，不按步骤强制拆 Run。
 需要独立审计时由另一个 Worker 执行；自测不能标为独立审计。
 共享索引由 Coordinator 单写，方案说明也必须指定唯一写入者。
@@ -192,8 +203,7 @@ Campaign、Variant、Run 的关联与状态规则见 [实验管理](references/e
 |---|---|
 | 新建或恢复实验、方案比较、维护状态 | [experiments.md](references/experiments.md) |
 | 正确性验证、baseline、benchmark、profiling | [benchmarking.md](references/benchmarking.md) |
-| 用户明确要求旧版结构化合同与严格验收 | [strict-audit.md](references/strict-audit.md) |
 
-普通任务不自动升级严格模式；独立审查本身也不要求全套旧协议。
+独立审查作为 Worker 任务执行，仍使用 task.md、result.md 和原始证据。
 references 是按问题读取的知识，不是每个 Worker 的必读清单。
-历史执行沿用保留的协议、路径和证据，不用新版模板解释或迁移旧合同。
+不再提供旧版合同或校验兼容；已有实验产物不删除或自动迁移，格式不匹配时报告并请求处理方案。

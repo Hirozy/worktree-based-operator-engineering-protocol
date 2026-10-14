@@ -17,11 +17,9 @@ class LightweightTests(unittest.TestCase):
 
     def test_entrypoint_is_short_and_references_resolve(self):
         skill = (ROOT / "SKILL.md").read_text()
-        self.assertLessEqual(len(skill.splitlines()), 200)
+        self.assertLessEqual(len(skill.splitlines()), 220)
         documents = [ROOT / "SKILL.md", *ROOT.glob("references/*.md")]
         for document in documents:
-            if document.name == "legacy-v2.md":
-                continue
             for target in re.findall(r"\]\(([^)]+)\)", document.read_text()):
                 with self.subTest(document=document.name, target=target):
                     self.assertTrue((document.parent / target).is_file())
@@ -71,10 +69,30 @@ class LightweightTests(unittest.TestCase):
         ):
             self.assertIn(requirement, skill)
 
-    def test_default_does_not_load_legacy_protocol(self):
+    def test_directory_context_selects_worker_without_dispatch(self):
+        skill = (ROOT / "SKILL.md").read_text()
+        context = (ROOT / "references/directory-context.md").read_text()
+        template = (ROOT / "templates/project-context.md").read_text()
+        self.assertIn("自动作为 Worker", skill)
+        self.assertIn("git worktree list --porcelain", context)
+        self.assertIn("--show-superproject-working-tree", context)
+        self.assertIn("没有明确任务入口时询问", context)
+        self.assertIn("不自动创建 Campaign", context)
+        self.assertIn("共享 Projects 目录", context)
+        self.assertIn("不适用于同一父目录下的其他项目", template)
+        self.assertIn("包括子目录", template)
+
+    def test_only_lightweight_protocol_is_shipped(self):
         skill = (ROOT / "SKILL.md").read_text()
         self.assertNotIn("legacy-v2.md", skill)
-        self.assertIn("普通任务不自动升级严格模式", skill)
+        for name in (
+            "references/legacy-v2.md", "references/strict-audit.md",
+            "templates/assignment.json", "templates/run-manifest.json",
+            "templates/validation.json", "templates/worker-start.md",
+            "schemas/assignment.schema.json", "schemas/run-manifest.schema.json",
+            "scripts/validate_contract.py", "tests/test_contract.py",
+        ):
+            self.assertFalse((ROOT / name).exists(), name)
         self.assertIn("一个 Run 内实现、测试和测量", skill)
         self.assertIn("Run 属于具体 Variant", skill)
         self.assertNotIn("Round", skill)
