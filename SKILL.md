@@ -44,9 +44,9 @@ Coordinator 同时负责汇总，不为维护文档单独启动 Agent。
 
 1. 检查已有任务说明、Git 状态、工作区占用及用户约定，不重写已有明确计划。
 2. 已有合适的隔离 worktree 就复用；确认属于目标仓库且无其他活跃写入者。
-3. 需要创建时优先使用宿主可用的原生能力；已有适用工具可复用，否则使用 Git。
+3. 需要创建时，仅使用能满足下方平级布局的原生能力或已有工具，否则使用 Git。
 4. 从明确源码起点创建，不猜测默认分支，不要求主目录名为 `repo`。
-5. 原生工作区的创建与清理交给其宿主管理，不重复接管或创建嵌套 worktree。
+5. 原生工作区由宿主管理；若位置不符合平级布局，先报告并请求明确例外，不默认为合规或重复创建。
 6. 隔离失败时报告阻塞，不退回多人共享的可写 checkout。
 7. 单 Agent 简单任务不必另起 Coordinator，但仍保存实验记录。
 
@@ -54,6 +54,37 @@ Coordinator 同时负责汇总，不为维护文档单独启动 Agent。
 - 分工：不同子任务，按依赖顺序集成。
 - 竞争：同一目标的多个方案，验证比较后选择，不全部合并。
 - 验证：检查指定源码状态，不擅自修改被审查实现。
+
+## 项目级布局（创建前必须确认）
+
+```text
+<project-container>/
+├── <primary-repository-name>/    # Git 主仓库，保留实际名称
+├── worktrees/                    # 本项目的任务工作树
+│   └── <task-worktree>/
+└── agent-artifacts/              # 持久产物根目录
+```
+
+主仓库、`worktrees/`、`agent-artifacts/` 必须是同一父目录下的三个不同目录。
+禁止在主仓库内部创建后两者，也禁止将主仓库本身当成 project-container。
+Coordinator 在分配实验产物或创建工作树前执行以下检查：
+
+1. 对已知 checkout 执行 `git worktree list --porcelain`，结合 `git rev-parse --git-common-dir`
+   识别实际主工作树；`git rev-parse --show-toplevel` 只表示当前 checkout，不一定是主仓库。
+   从 linked worktree 启动时仍以主仓库定位父目录，不以当前 cwd 的父目录定位。
+2. 解析真实路径：`project_container = parent(primary_repository)`；
+   `worktrees_root = project_container/worktrees`；
+   `artifact_root = project_container/agent-artifacts`。不硬编码主仓库名为 repo。
+3. 检查父目录写权限、已有目录/符号链接及其他项目占用。确认安全后复用或创建两个平级目录，
+   包括复用既有工作树时保留 `worktrees/` 入口；这是项目基础布局，不是预建空实验骨架。
+4. 新任务工作树放在 `worktrees_root/<task-worktree>`，从明确 commit 创建；
+   创建后检查真实路径仍符合该位置，artifact_root 不位于任何代码工作树内。
+5. 返回实际主仓库、project_container、worktrees_root、artifact_root、任务工作树的绝对路径，
+   核实两个根目录存在且与主仓库平级，再报告准备完成。
+
+权限不足、裸仓库、多仓库共用父目录、同名路径冲突或宿主固定位置无法满足布局时，
+报告冲突并取得用户明确布局选择；禁止静默退回主仓库内创建。
+发现旧产物放错位置时不自动移动、删除或重定向链接，先给出迁移方案并确认没有活跃写入者。
 
 ## 持久目录
 
@@ -109,7 +140,7 @@ Campaign 内 Variant ID 唯一；同一方案持续迭代时保持身份。
 
 ## 执行与交接
 
-1. Coordinator 建立或复用专题，确定当前问题、方案及 Run，登记 pending。
+1. Coordinator 先确认项目级平级布局，再建立或复用专题，确定当前问题、方案及 Run，登记 pending。
 2. 创建 task 与工作区；仅请求准备环境时报告路径并停止，不启动实验。
 3. Worker 核实后由 Coordinator 登记 running，开始授权任务。
 4. 测试与测量尽量直接输出到外部 Run；临时文件可留工作区，但交接前收集必需证据。

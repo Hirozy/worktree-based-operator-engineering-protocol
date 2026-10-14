@@ -34,6 +34,19 @@ class LightweightTests(unittest.TestCase):
         for field in ("commit", "未提交", "证据", "进程"):
             self.assertIn(field, result)
 
+    def test_sibling_layout_is_explicit(self):
+        skill = (ROOT / "SKILL.md").read_text()
+        self.assertIn("project_container = parent(primary_repository)", skill)
+        self.assertIn("worktrees_root = project_container/worktrees", skill)
+        self.assertIn("artifact_root = project_container/agent-artifacts", skill)
+        self.assertIn("git worktree list --porcelain", skill)
+        self.assertIn("禁止在主仓库内部创建后两者", skill)
+        self.assertIn("两个根目录存在且与主仓库平级", skill)
+        self.assertIn("禁止静默退回主仓库内创建", skill)
+        task = (ROOT / "templates/task.md").read_text()
+        for field in ("主仓库", "项目容器", "工作树根目录", "产物根目录"):
+            self.assertIn(field, task)
+
     def test_default_does_not_load_legacy_protocol(self):
         skill = (ROOT / "SKILL.md").read_text()
         self.assertNotIn("legacy-v2.md", skill)
