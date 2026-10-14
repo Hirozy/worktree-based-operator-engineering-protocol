@@ -31,11 +31,10 @@ git worktree list --porcelain
 ## Worker 的上下文入口
 
 - 默认不执行 Coordinator 的创建后询问、分配身份、维护共享索引或新建工作树流程。
-- 用户将 Coordinator 提供的提示粘贴到新会话后，Worker 读取提示指定的 Skill 和 task.md；
-  项目原有说明仍需正常读取，不修改其内容。核实工作树、源码与 Run。
-- 没有 task 时，可只读查看已存在的 .agent-artifacts/README.md，理解工作树用途，
-  但 Campaign 上下文不等于具体执行授权。
-- 没有明确任务入口时询问用户或 Coordinator 提供准确 task 路径或分配任务；
+- 用户手动注入启动提示后，Worker 读取指定 Skill 和项目原有说明，核实当前工作树。
+- 可只读查看已存在的 .agent-artifacts/README.md，理解大方向，然后报告就绪并等待用户具体 prompt。
+  Campaign 上下文不等于执行授权；启动不要求 task.md、Variant 或 Run。
+- 收到具体任务后再核实源码、输入及 Run 分配，记录 task；缺少执行分配时向用户说明，
   不选“最新”Run，不扫描后猜测一个可执行任务，不自动创建 Campaign。
 - 链接缺失或指向旧布局时报告；不能自行创建、覆盖或重定向。
 

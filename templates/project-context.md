@@ -21,10 +21,10 @@
 
 ## Worker 启动
 
-由用户粘贴 Coordinator 提供的启动提示，再读其中明确的 SKILL.md 和 task.md，
-核实任务和产物目录；本说明不代替手动启动提示，不修改项目原有指令文件。
+由用户粘贴 Coordinator 提供的启动提示，读取指定 SKILL.md 并核实工作树，
+了解工作方向后等待用户另行给出具体任务；启动不要求 task.md，不修改项目原有指令文件。
 已确认创建 Campaign 时，工作树的 .agent-artifacts 指向该 Campaign；
 其中 README.md 解释工作树用途，variants/<variant>/runs/<run>/ 保存执行记录。
-没有明确 task 时请求分配；不自行创建 Campaign、Run 或另一个 worktree，
+具体任务明确后再确认执行分配；不自行创建 Campaign、Run 或另一个 worktree，
 不根据“最新”记录猜测任务。不得修改共享 campaign.json 或其他 Worker 的产物。
 <!-- END operator-project:<primary-repository-absolute-path> -->

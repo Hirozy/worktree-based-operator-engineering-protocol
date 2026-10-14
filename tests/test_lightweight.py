@@ -76,7 +76,7 @@ class LightweightTests(unittest.TestCase):
         self.assertIn("自动作为 Worker", skill)
         self.assertIn("git worktree list --porcelain", context)
         self.assertIn("--show-superproject-working-tree", context)
-        self.assertIn("没有明确任务入口时询问", context)
+        self.assertIn("等待用户具体 prompt", context)
         self.assertIn("不自动创建 Campaign", context)
         self.assertIn("共享 Projects 目录", context)
         self.assertIn("不适用于同一父目录下的其他项目", template)
@@ -93,7 +93,11 @@ class LightweightTests(unittest.TestCase):
         self.assertNotIn("不是 Coordinator", prompt)
         self.assertLessEqual(len(prompt.splitlines()), 10)
         self.assertIn("<worker-accessible-skill-md-absolute-path>", prompt)
-        self.assertIn("<task-md-absolute-path>", prompt)
+        self.assertNotIn("task.md", prompt)
+        self.assertNotIn("<task-md-absolute-path>", prompt)
+        self.assertIn("等待我给出具体任务", prompt)
+        self.assertIn("不要根据工作方向自行开始", prompt)
+        self.assertIn("无需预先分配任务、Variant 或 Run", skill)
         self.assertIn("项目原有说明", prompt)
 
     def test_only_lightweight_protocol_is_shipped(self):

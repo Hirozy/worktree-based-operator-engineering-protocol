@@ -157,25 +157,29 @@ Campaign 内 Variant ID 唯一；同一方案持续迭代时保持身份。
 ## 任务与启动
 
 每个派发 Run 使用 `templates/task.md`，填入真实值，删去不适用的可选项。
-它是唯一任务入口，包含目标、范围、身份、路径、源码起点、必要输入及验收要求。
+它是具体执行的持久记录，包含目标、范围、身份、路径、源码起点、必要输入及验收要求，不是启动前置条件。
 同一会话的明确计划可以直接引用，不再生成另一份计划或合同。
 
 新 Agent 不继承主 Agent 的上下文。采用手动注入：Coordinator 输出准确的启动目录，
 并按 `templates/worker-prompt.md` 渲染一段可直接复制的提示词，由用户启动 Agent 后粘贴。
-提示中明确 Worker 身份、项目原有说明、SKILL.md 与 task.md 的绝对路径和执行边界。
+提示只包含 Worker 身份、工作树目录、SKILL.md 路径及等待具体任务的要求，不包含 task.md 路径。
 验证 Skill 路径是目标 Worker 环境中可访问的实际路径，不照搬 Coordinator 本机路径。
-任务尚未分配或路径无法确认时先报告缺项，不输出含占位符的“可执行提示”，不为此伪造 Run。
-输出提示不代表 Worker 已启动；Run 保持 pending，收到实际启动确认后才更新 running。
+工作树或 Skill 路径无法确认时先补齐，不输出含占位符的启动提示；无需预先分配任务、Variant 或 Run。
+Worker 读取已有 Campaign README 了解大方向并报告就绪，等待用户在其会话内给出具体 prompt。
+工作方向不是执行授权；不主动实现、测量或扫描“最新”任务。没有 Campaign 时也可加载 Skill 并等待任务。
+就绪不代表某个 Run 已开始；已有 Run 保持 pending，实际执行检查通过后才更新 running。
 不自动启动 Agent，不修改项目原生指令或全局配置，不依赖环境变量、上层说明或空白会话自动加载。
 不要生成单独 worker-start、全量协议快照或默认 JSON 合同。
-将必要约束写入 task；复杂参考资料只提供本任务需要的路径。
-启动前核实仓库、源码、读写路径、必要输入和工作区占用；不生成额外握手报告。
+收到具体 prompt 后再明确范围与验收，按既有所有权规则分配 Variant/Run 并将任务持久记录到 task.md。
+Worker 不因收到 prompt 自动取得共享索引写权限；若尚未分配 Run，向用户说明需由 Coordinator 分配或明确授权，
+不能将这一缺项当作启动失败，也不能无记录地执行实验。启动时仅核实工作树和 Skill，执行前再核实任务输入与产物路径。
 
 ## 执行与交接
 
 1. Coordinator 确认项目级平级布局，创建或复用工作区；新建后完成 Campaign 询问与可选初始化。
-2. 仅请求准备环境时报告路径并停止；获准执行且 Campaign 已确认后，确定方案及 Run、登记 pending 并创建 task。
-3. Coordinator 给出启动目录与提示词，用户手动注入；Worker 核实后由 Coordinator 登记 running，开始授权任务。
+2. Coordinator 给出启动目录与提示词，用户手动注入；Worker 加载上下文后报告就绪，不预建任务或执行。
+3. 用户在 Worker 会话内给出具体任务后，确认 Campaign、方案与 Run 的分配和写入权限，记录 task；
+   由 Coordinator 登记 pending，Worker 核实执行条件后登记 running 并开始授权任务。
 4. 测试与测量尽量直接输出到外部 Run；临时文件可留工作区，但交接前收集必需证据。
 5. Worker 在 result 中记录源码状态、命令、结论、证据路径、失败及未执行项。
 6. Coordinator 核对实际证据后更新索引；不足时记录原因，不宣称通过。

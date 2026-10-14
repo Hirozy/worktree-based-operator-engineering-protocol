@@ -78,7 +78,7 @@ npx skills add https://gitcode.com/Hirozy/worktree-based-operator-engineering-pr
 ## 使用
 
 Agent 启动时先用 Git 元数据识别位置：在任务 worktree（包括子目录）默认作为 Worker，
-在主仓库或已确认的项目容器默认作为 Coordinator。任务入口缺失时询问，不自动转为编排者。
+在主仓库或已确认的项目容器默认作为 Coordinator。启动后等待具体任务，不自动转为编排者。
 用户明确要求时，Coordinator 根据 templates/project-context.md 在主仓库上层生成项目 AGENTS.md，
 简述主仓库、worktrees、agent-artifacts 的作用；保留已有说明，共享父目录需先确认作用范围。
 上层说明仅解释布局，不作为启动依赖；不为注入 Worker 身份修改项目自带的指令文件。
@@ -95,11 +95,13 @@ $worktree-based-operator-engineering-protocol
 > 同一 NPU 上串行测量，记录比较结论；未经确认不合并或删除工作树。
 
 Coordinator 根据 templates/worker-prompt.md 输出准确启动目录和一段已填充的提示词，
-包含 Worker 身份、目标环境可读的 SKILL.md 与 task.md 绝对路径。
+只包含 Worker 身份、工作树目录、目标环境可读的 SKILL.md 路径及等待任务的要求。
 用户手动启动 Agent 并粘贴提示；Coordinator 不自动启动 Agent。
-尚未分配任务或路径不确定时先补齐信息，不输出含占位符的启动提示，也不假装 Worker 已运行。
+启动无需 task.md 或预先创建 Variant/Run；工作树或 Skill 路径不确定时先补齐，不输出占位符。
+Worker 读取已链接 Campaign 的 README 了解大方向，报告就绪后等待用户在该会话中提供具体 prompt。
+收到具体任务后才确认执行分配与权限、记录 task.md 并保存执行证据；共享状态仍由 Coordinator 管理。
 不依赖空白会话自动发现 Skill，不再默认创建 worker-start 或复制全量协议。
-只请求准备工作区时，返回路径和任务入口，不自动开始执行。
+只请求准备工作区时，返回路径和启动提示，不自动开始执行。
 
 ## 按需能力
 
