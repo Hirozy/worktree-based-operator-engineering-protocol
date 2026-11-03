@@ -164,10 +164,10 @@ Campaign 内 Variant ID 唯一；同一方案持续迭代时保持身份。
 
 新 Agent 不继承主 Agent 的上下文。采用手动注入：Coordinator 输出准确的启动目录，
 并按 `templates/worker-prompt.md` 渲染一段可直接复制的提示词，由用户启动 Agent 后粘贴。
-提示只包含 Worker 身份、工作树目录、SKILL.md 路径及等待具体任务的要求，不包含 task.md 路径。
+提示只包含 Worker 身份、工作树目录、SKILL.md 路径及任务处理规则，不包含 task.md 路径。
 验证 Skill 路径是目标 Worker 环境中可访问的实际路径，不照搬 Coordinator 本机路径。
 工作树或 Skill 路径无法确认时先补齐，不输出含占位符的启动提示；无需预先分配任务、Variant 或 Run。
-Worker 读取已有 Campaign README 了解大方向并报告就绪，等待用户在其会话内给出具体 prompt。
+Worker 读取已有 Campaign README；用户已给出具体任务（含与启动提示一同提供）时核实条件后执行，否则报告就绪并等待。
 工作方向不是执行授权；不主动实现、测量或扫描“最新”任务。没有 Campaign 时也可加载 Skill 并等待任务。
 就绪不代表某个 Run 已开始；已有 Run 保持 pending，实际执行检查通过后才更新 running。
 不自动启动 Agent，不修改项目原生指令或全局配置，不依赖环境变量、上层说明或空白会话自动加载。
@@ -179,7 +179,7 @@ Worker 在 result.md 维护执行状态与证据，不修改共享 campaign.json
 ## 执行与交接
 
 1. Coordinator 核实项目布局，创建或复用工作区；按用户已有选择处理 Campaign，仅补问缺失信息。
-2. Coordinator 给出启动目录与提示词，用户手动注入；Worker 加载上下文后报告就绪，不预建任务或执行。
+2. Coordinator 给出启动目录与提示词，用户手动注入；Worker 加载上下文，有具体任务则继续，否则报告就绪并等待。
 3. 用户给出具体任务后，Worker 创建 Run、记录 task；在 result.md 记 pending，执行条件核实后改为 running。
 4. 测试与测量尽量直接输出到外部 Run；临时文件可留工作区，但交接前收集必需证据。
 5. Worker 在 result 中记录源码状态、命令、结论、证据路径、失败及未执行项。

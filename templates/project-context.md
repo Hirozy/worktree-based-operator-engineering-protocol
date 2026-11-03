@@ -22,7 +22,7 @@
 ## Worker 启动
 
 由用户粘贴 Coordinator 提供的启动提示，读取指定 SKILL.md 并核实工作树，
-了解工作方向后等待用户另行给出具体任务；启动不要求 task.md，不修改项目原有指令文件。
+已有具体任务则按 Skill 核实条件后执行，否则报告就绪并等待；启动不要求 task.md，不修改项目原有指令文件。
 已确认创建 Campaign 时，工作树的 .agent-artifacts 指向该 Campaign；
 其中 README.md 解释工作树用途，variants/<variant>/runs/<run>/ 保存执行记录。
 具体任务明确后在已确认的 Campaign 内按需创建 Variant/Run；不自行创建 Campaign 或另一个 worktree，
