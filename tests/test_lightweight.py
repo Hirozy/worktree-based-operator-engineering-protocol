@@ -44,10 +44,12 @@ class LightweightTests(unittest.TestCase):
 
     def test_campaign_creation_requires_confirmation(self):
         skill = (ROOT / "SKILL.md").read_text()
-        self.assertIn("每次新建 worktree 成功后，主动询问", skill)
-        self.assertIn("等待用户明确答复", skill)
+        self.assertIn("worktree 创建后直接执行，不重复询问", skill)
+        self.assertIn("尚未表明选择时，询问", skill)
+        self.assertIn("已明确拒绝时不再次追问", skill)
+        self.assertIn("仅授权创建 worktree 不等于授权创建 Campaign", skill)
         self.assertIn("basename 为 campaign_id（不是分支名）", skill)
-        self.assertIn("选择否或尚未答复", skill)
+        self.assertIn("明确拒绝或尚未表明选择", skill)
         self.assertIn("同名 Campaign 已存在", skill)
         self.assertIn("<project-container>/agent-artifacts/campaigns/<worktree-name>/", skill)
         self.assertNotIn("不得改指向 Campaign", skill)

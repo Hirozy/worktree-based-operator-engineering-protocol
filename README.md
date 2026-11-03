@@ -49,15 +49,15 @@ campaign.json 由 Coordinator 汇总，Run 状态以 Worker 的 result.md 为准
 Worker 按具体任务创建 Variant/Run，无需逐次分配；不改共享索引或其他 Worker 的产物。Run 完成不表示验证通过或方案接受。
 同一 Variant 可多次执行，Run 固定归属一个 Variant；新测量不覆盖旧结果。
 
-创建 worktree 后，Coordinator 主动询问是否创建同名 Campaign，等待明确答复。
+创建 worktree 后，按用户已有明确选择处理 Campaign；仅未表明选择时询问，已拒绝时不追问。
 用户未说明 worktree 用途时，追加询问用途和目标；已有明确说明则不重复问。
 确认创建或复用 Campaign 后，将用途写入 `.agent-artifacts/README.md` 的“工作树用途”节，
 新专题同时填写 `campaign.json.objective`；复用专题不擅自改写其总目标。
 未确认 Campaign 时不为记录用途偷偷创建目录；未授权创建 worktree 时先确认创建意图。
-选择是：以工作树实际目录名创建 `agent-artifacts/campaigns/<worktree-name>/`，
+已明确要求或选择是：以工作树实际目录名创建 `agent-artifacts/campaigns/<worktree-name>/`，
 初始化 campaign.json 和 README.md，并将 worktree 内的 `.agent-artifacts` 链接到该 Campaign。
-选择否或未答复：只保留工作树，不创建 Campaign 或链接，不启动实验。
-同名专题已存在时先询问是否复用；链接冲突不覆盖。Variant 与 Run 在实际实验时按需创建。
+明确拒绝或尚未表明选择：只保留工作树，不创建 Campaign 或链接，不启动实验。
+同名专题已存在时核实身份，已明确指定复用则不再询问；链接冲突不覆盖。Variant 与 Run 按需创建。
 任务给出绝对产物路径，Git 忽略只配置在仓库本地。
 已有实验产物、路径和映射不删除或自动迁移；不再提供旧版合同兼容。
 
