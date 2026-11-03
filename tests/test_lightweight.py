@@ -27,7 +27,7 @@ class LightweightTests(unittest.TestCase):
     def test_worker_templates_include_handoff_and_provenance(self):
         task = (ROOT / "templates/task.md").read_text()
         result = (ROOT / "templates/result.md").read_text()
-        for field in ("Campaign", "Variant", "Run", "基础 commit", "产物目录", "验收"):
+        for field in ("Campaign", "Variant", "Run", "工作树", "基础 commit", "产物目录", "上下文", "验收"):
             self.assertIn(field, task)
         for field in ("commit", "未提交", "证据", "进程"):
             self.assertIn(field, result)
@@ -41,9 +41,6 @@ class LightweightTests(unittest.TestCase):
         self.assertIn("禁止在主仓库内部创建后两者", skill)
         self.assertIn("两个根目录存在且与主仓库平级", skill)
         self.assertIn("禁止静默退回主仓库内创建", skill)
-        task = (ROOT / "templates/task.md").read_text()
-        for field in ("主仓库", "项目容器", "工作树根目录", "产物根目录"):
-            self.assertIn(field, task)
 
     def test_campaign_creation_requires_confirmation(self):
         skill = (ROOT / "SKILL.md").read_text()
