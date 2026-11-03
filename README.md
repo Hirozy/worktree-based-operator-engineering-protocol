@@ -8,6 +8,7 @@
 - 优先复用合适的隔离工作区，不重复管理宿主创建的 worktree。
 - 每个 Campaign 一个状态索引，每个 Variant 一份方案说明，每个 Run 两份交接文档。
 - 同一 Worker 可完成实现、自测和测量；不为每一步新建角色或执行。
+- 普通查看与问答不建 Run；实际修改实现、执行测试或测量、正式审计才建立执行记录。
 - 所有方案 Run 归属 Variant，不设置额外轮次层级。
 - 产物位于 worktree 外，失败和中断证据同样保留，清理工作树不会清理实验历史。
 - 仅用于昇腾硬件或 CANN 算子工程，不用于通用软件开发或仅面向其他后端的任务。
@@ -99,7 +100,7 @@ Coordinator 根据 templates/worker-prompt.md 输出准确启动目录和一段�
 用户手动启动 Agent 并粘贴提示；Coordinator 不自动启动 Agent。
 启动无需 task.md 或预先创建 Variant/Run；工作树或 Skill 路径不确定时先补齐，不输出占位符。
 Worker 读取已链接 Campaign 的 README；若已提供具体任务（可与启动提示一起粘贴），核实条件后执行，否则报告就绪并等待。
-收到具体任务后记录 task.md，在 result.md 维护状态并保存证据；无需等待 Coordinator 分配 Run 或更新索引。
+需要 Run 的任务才记录 task.md，在 result.md 维护状态并保存证据；无需等待 Coordinator 分配 Run 或更新索引。
 不依赖空白会话自动发现 Skill，不再默认创建 worker-start 或复制全量协议。
 只请求准备工作区时，返回路径和启动提示，不自动开始执行。
 

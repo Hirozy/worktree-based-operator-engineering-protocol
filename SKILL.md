@@ -60,7 +60,7 @@ Coordinator 同时负责汇总，不为维护文档单独启动 Agent。
 4. 从明确源码起点创建，不猜测默认分支，不要求主目录名为 `repo`。
 5. 原生工作区由宿主管理；位置不符合平级布局时，沿用已确认且仍适用的例外，否则请求确认，不重复创建。
 6. 隔离失败时报告阻塞，不退回多人共享的可写 checkout。
-7. 单 Agent 简单任务不必另起 Coordinator，但仍保存实验记录。
+7. 单 Agent 简单任务不必另起 Coordinator；是否建立 Run 按下方记录范围判断。
 
 并行前声明模式：
 - 分工：不同子任务，按依赖顺序集成。
@@ -144,8 +144,9 @@ agent-artifacts/
 沿用已有专题，不因换 Agent 或重开会话重复创建。
 Campaign 内 Variant ID 唯一；同一方案持续迭代时保持身份。
 每个 Run 固定归属一个 Variant；多次迭代以独立 Run 记录，不增加轮次实体。
-独立辅助操作无需伪造方案或 Run；其结论由 Coordinator 记入专题 README。
-需要可追溯的测试或测量则归属被验证方案的 Run。
+浏览代码、解释已有结果、普通问答无需 Run，也不要求先创建 Campaign。
+实际修改实现、执行测试或测量、正式审计需要 Run；同一任务的调试和验证复用活动 Run，不按命令拆分。
+有价值的方案分析可由原写入者记入已有 proposal；不为普通交流生成空方案、任务或报告。
 
 新建 Campaign 的链接语义：
 `<worktree>/.agent-artifacts -> <project-container>/agent-artifacts/campaigns/<worktree-name>/`。
@@ -172,7 +173,7 @@ Worker 读取已有 Campaign README；用户已给出具体任务（含与启动
 就绪不代表某个 Run 已开始；已有 Run 保持 pending，实际执行检查通过后才更新 running。
 不自动启动 Agent，不修改项目原生指令或全局配置，不依赖环境变量、上层说明或空白会话自动加载。
 不要生成单独 worker-start、全量协议快照或默认 JSON 合同。
-收到具体任务后，Worker 在已确认且 active 的 Campaign 内按需创建 Variant/Run，记录 task.md 后执行，无需逐次分配。
+收到具体任务先判断是否需要 Run；需要时在已确认且 active 的 Campaign 内按需创建 Variant/Run，记录 task.md 后执行，无需逐次分配。
 已有方案可复用，但不接管其他 Worker 的方案说明或 Run；身份不清或存在写入冲突时才询问。
 Worker 在 result.md 维护执行状态与证据，不修改共享 campaign.json，也不等待其更新。
 
@@ -180,7 +181,7 @@ Worker 在 result.md 维护执行状态与证据，不修改共享 campaign.json
 
 1. Coordinator 核实项目布局，创建或复用工作区；按用户已有选择处理 Campaign，仅补问缺失信息。
 2. Coordinator 给出启动目录与提示词，用户手动注入；Worker 加载上下文，有具体任务则继续，否则报告就绪并等待。
-3. 用户给出具体任务后，Worker 创建 Run、记录 task；在 result.md 记 pending，执行条件核实后改为 running。
+3. 无需 Run 的请求直接处理并结束；需要时创建或复用活动 Run、记录 task，核实执行条件后按事实更新 result.md 状态。
 4. 测试与测量尽量直接输出到外部 Run；临时文件可留工作区，但交接前收集必需证据。
 5. Worker 在 result 中记录源码状态、命令、结论、证据路径、失败及未执行项。
 6. Coordinator 核对实际证据后更新索引；不足时记录原因，不宣称通过。

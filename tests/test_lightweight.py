@@ -127,6 +127,8 @@ class LightweightTests(unittest.TestCase):
         self.assertNotIn("由 Coordinator 登记 pending", skill)
         self.assertIn("Run 的执行状态以 result.md 为准", skill)
         self.assertIn("不修改共享 campaign.json", skill)
+        self.assertIn("普通问答无需 Run，也不要求先创建 Campaign", skill)
+        self.assertIn("正式审计需要 Run", skill)
         result = (ROOT / "templates/result.md").read_text()
         for state in ("pending", "running", "completed", "failed", "cancelled"):
             self.assertIn(state, result)
