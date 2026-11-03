@@ -1,5 +1,7 @@
 # 执行结果
 
+- 执行状态：pending（执行前改为 running，结束时改为 completed / failed / cancelled）
+
 ## 源码与工作
 
 - Run：<实际 ID>

@@ -29,8 +29,8 @@ Coordinator 输出启动提示，由用户手动注入；目录角色识别在�
 
 | 职责 | 工作 |
 |---|---|
-| Coordinator | 明确目标和依赖，分配 Campaign/Variant/Run 与工作区，派发、核验、维护共享索引、组织集成和清理 |
-| Worker | 在授权范围内实现、测试、benchmark、审查或集成，将事实和证据写入自己的 Run |
+| Coordinator | 明确目标和依赖，准备 Campaign 与工作区，核验、汇总共享索引、组织集成和清理 |
+| Worker | 按具体任务创建 Variant/Run，实现、验证并保存自己的执行状态和证据 |
 
 实现、测试、审计、集成是任务类型，不是额外角色。
 Coordinator 同时负责汇总，不为维护文档单独启动 Agent。
@@ -156,7 +156,7 @@ Campaign 内 Variant ID 唯一；同一方案持续迭代时保持身份。
 
 ## 任务与启动
 
-每个派发 Run 使用 `templates/task.md`，填入真实值，删去不适用的可选项。
+每个 Run 使用 `templates/task.md`，填入真实值，删去不适用的可选项。
 它是具体执行的持久记录，包含目标、范围、身份、路径、源码起点、必要输入及验收要求，不是启动前置条件。
 同一会话的明确计划可以直接引用，不再生成另一份计划或合同。
 
@@ -170,16 +170,15 @@ Worker 读取已有 Campaign README 了解大方向并报告就绪，等待用�
 就绪不代表某个 Run 已开始；已有 Run 保持 pending，实际执行检查通过后才更新 running。
 不自动启动 Agent，不修改项目原生指令或全局配置，不依赖环境变量、上层说明或空白会话自动加载。
 不要生成单独 worker-start、全量协议快照或默认 JSON 合同。
-收到具体 prompt 后再明确范围与验收，按既有所有权规则分配 Variant/Run 并将任务持久记录到 task.md。
-Worker 不因收到 prompt 自动取得共享索引写权限；若尚未分配 Run，向用户说明需由 Coordinator 分配或明确授权，
-不能将这一缺项当作启动失败，也不能无记录地执行实验。启动时仅核实工作树和 Skill，执行前再核实任务输入与产物路径。
+收到具体任务后，Worker 在已确认且 active 的 Campaign 内按需创建 Variant/Run，记录 task.md 后执行，无需逐次分配。
+已有方案可复用，但不接管其他 Worker 的方案说明或 Run；身份不清或存在写入冲突时才询问。
+Worker 在 result.md 维护执行状态与证据，不修改共享 campaign.json，也不等待其更新。
 
 ## 执行与交接
 
 1. Coordinator 确认项目级平级布局，创建或复用工作区；新建后完成 Campaign 询问与可选初始化。
 2. Coordinator 给出启动目录与提示词，用户手动注入；Worker 加载上下文后报告就绪，不预建任务或执行。
-3. 用户在 Worker 会话内给出具体任务后，确认 Campaign、方案与 Run 的分配和写入权限，记录 task；
-   由 Coordinator 登记 pending，Worker 核实执行条件后登记 running 并开始授权任务。
+3. 用户给出具体任务后，Worker 创建 Run、记录 task；在 result.md 记 pending，执行条件核实后改为 running。
 4. 测试与测量尽量直接输出到外部 Run；临时文件可留工作区，但交接前收集必需证据。
 5. Worker 在 result 中记录源码状态、命令、结论、证据路径、失败及未执行项。
 6. Coordinator 核对实际证据后更新索引；不足时记录原因，不宣称通过。
@@ -187,13 +186,13 @@ Worker 不因收到 prompt 自动取得共享索引写权限；若尚未分配 R
 
 活跃 Run 中的调试和补充不强制拆分；已结束后的重试、新测量或独立审查新建 Run。
 结束后的 task/result/证据保留，后续纠错由新 Run 引用旧 Run，不重写旧结论。
-任务范围实质变化时停止旧执行并重新派发；不暗改正在执行的任务。
-Worker 崩溃时保留部分证据，Coordinator 在索引记录中断；不冒充 Worker 补写结果。
+任务范围实质变化时结束旧执行并创建新 Run；不暗改正在执行的任务。
+Worker 崩溃时保留部分证据，确认进程停止后由 Coordinator 在 result 追加中断状态与记录者，不补写验证结论。
 
 ## 实验状态
 
-`campaign.json` 是共享状态的唯一索引；result 是执行事实，不是另一份状态数据库。
-Coordinator 在派发、开始、结束和决策时更新，不要求逐命令记录。
+Run 的执行状态以 result.md 为准；campaign.json 由 Coordinator 稍后汇总，允许滞后，不阻塞执行。
+Campaign/Variant 的状态与决策仍由 Coordinator 管理；执行完成不等于验证通过或方案接受。
 使用 `templates/campaign.json` 的结构，按需填充，禁止创建示例中的虚构执行。
 Campaign、Variant、Run 的关联与状态规则见 [实验管理](references/experiments.md)。
 并行工作前确认单一 Coordinator；交接期间停止旧写入者，再校对索引接管。

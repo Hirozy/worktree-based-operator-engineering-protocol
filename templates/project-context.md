@@ -25,6 +25,6 @@
 了解工作方向后等待用户另行给出具体任务；启动不要求 task.md，不修改项目原有指令文件。
 已确认创建 Campaign 时，工作树的 .agent-artifacts 指向该 Campaign；
 其中 README.md 解释工作树用途，variants/<variant>/runs/<run>/ 保存执行记录。
-具体任务明确后再确认执行分配；不自行创建 Campaign、Run 或另一个 worktree，
+具体任务明确后在已确认的 Campaign 内按需创建 Variant/Run；不自行创建 Campaign 或另一个 worktree，
 不根据“最新”记录猜测任务。不得修改共享 campaign.json 或其他 Worker 的产物。
 <!-- END operator-project:<primary-repository-absolute-path> -->

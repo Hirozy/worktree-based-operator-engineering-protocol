@@ -34,8 +34,8 @@ git worktree list --porcelain
 - 用户手动注入启动提示后，Worker 读取指定 Skill 和项目原有说明，核实当前工作树。
 - 可只读查看已存在的 .agent-artifacts/README.md，理解大方向，然后报告就绪并等待用户具体 prompt。
   Campaign 上下文不等于执行授权；启动不要求 task.md、Variant 或 Run。
-- 收到具体任务后再核实源码、输入及 Run 分配，记录 task；缺少执行分配时向用户说明，
-  不选“最新”Run，不扫描后猜测一个可执行任务，不自动创建 Campaign。
+- 收到具体任务后核实 Campaign、源码和输入，按需创建 Variant/Run 并记录任务和状态，无需逐次分配。
+  不选“最新”Run，不接管其他写入者，不自动创建 Campaign。
 - 链接缺失或指向旧布局时报告；不能自行创建、覆盖或重定向。
 
 ## 上层目录说明

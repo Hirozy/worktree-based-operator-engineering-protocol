@@ -7,8 +7,7 @@
 Campaign 是持续工程目标；Variant 是具体假设或实现方式；
 Run 是一次执行。目录必须为 `variants/<variant-id>/runs/<run-id>/`。
 同一 Variant 可多次执行；Run 固定属于一个 Variant，不能移动或改绑。
-Variant 用 Campaign 内唯一的 V001 等编号，不复用。
-Run 使用时间戳、Agent 与序号等无冲突 ID；已有目录不能覆盖。
+Variant 和 Run 的 ID 在 Campaign 内唯一；并行创建时可加 Worker 标识与随机后缀，目录已存在则换 ID，不覆盖。
 方案实质改变时新建 Variant 并记录 parent_variant；细化实现可在原方案继续。
 源码起点必须明确；来源方案与性能比较对象不是同一个概念。
 
@@ -25,6 +24,7 @@ campaign.json 使用 lightweight-1 版本。
   variant_id 标识决策对象；run_ids 可引用不同方案的执行以支持比较。
 
 result_path 相对 Campaign，必须为 variants/<variant_id>/runs/<id>/result.md。
+Run 状态来自 result.md；汇总时核对实际方案和 Run 文件，补录新记录，不仅依赖旧索引。
 worktree 使用真实绝对路径；仅产物分析可为 null。
 outcome 是 Coordinator 根据证据记录的 passed、failed、inconclusive 或 null，
 不从执行状态推导；pending 时为 null，结束但未核验时仍可为 null。
@@ -43,25 +43,25 @@ result_path 是预期位置，不表示文件已存在。失败 Run 可没有 re
 | Variant | exploring / accepted / rejected / superseded |
 | Run | pending / running / completed / failed / cancelled |
 
-Run：pending 可转 running、failed 或 cancelled；running 可转任一终态。
+Run：pending 可转 running、failed 或 cancelled；running 可转任一终态，由 Worker 更新 result.md 的状态字段。
 Run 终态不可重开；测试失败但执行流程正常结束可以 completed，outcome 为 failed。
 没有证据时 outcome 不得为 passed。失败、中断原因及尚存进程必须如实记录。
 Variant 的 accepted 绑定 selected_commit 与明确证据。新 commit 不继承旧验证；
 重新探索时保留历史决策，将当前状态设 exploring，selected_commit 清空。
 被拒方案在后续重试可恢复 exploring，但保留原拒绝决定。
 superseded 的原因与替代方案记入决策，旧证据不能删除。
-Campaign 只有所有活动 Run 结束、最终决策或取消原因已记录后才能 completed 或 cancelled。
+结束 Campaign 前协调停止新执行，核实实际 Run 均结束并汇总索引、记录最终决策，不能仅凭旧索引判断。
 暂停不是终止进程；仍运行的 Run 必须明确记录，不能清理其工作树。
 
 ## 写入与恢复
 
 Coordinator 是唯一索引写入者，用临时文件完成 JSON 解析检查后原子替换索引。
 不增加锁服务或状态数据库；若发现另一个 Coordinator，先协调唯一写入者再继续。
-Worker 只写自己的 Run；proposal 由 Coordinator 或明确授权的唯一 Worker 维护。
+Worker 可按具体任务创建方案与 Run，维护自己创建的 proposal 和 Run；已有方案说明保持唯一写入者。
 Campaign decisions 追加记录，不覆盖旧决策；README 只概述当前结论并链接证据。
 恢复时读取索引、目标方案与相关结果，核对 Git 和进程实际情况；
 不能根据旧 running 状态判定仍存活，也不能据文件存在就宣称成功。
-崩溃后确认进程停止，再将 Run 标为 failed 并写 note，保留部分文件。
+崩溃后确认原写入者和进程停止，在 result 追加 failed、原因与记录者，再同步索引；不改写已有终态或验证事实。
 清理前核对代码可恢复、证据存在及生产进程已停止，不仅检查 Git 工作区干净。
 
 ## 文档与例外

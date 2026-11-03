@@ -45,8 +45,8 @@ agent-artifacts/
             └── ...                 # 真实测试、日志、性能数据等
 ```
 
-campaign.json 由 Coordinator 单独更新，记录 Campaign/Variant/Run 状态、关联和决策。
-Worker 只写自己的执行产物。Run 完成不表示测试通过或方案已被接受。
+campaign.json 由 Coordinator 汇总，Run 状态以 Worker 的 result.md 为准，索引允许滞后。
+Worker 按具体任务创建 Variant/Run，无需逐次分配；不改共享索引或其他 Worker 的产物。Run 完成不表示验证通过或方案接受。
 同一 Variant 可多次执行，Run 固定归属一个 Variant；新测量不覆盖旧结果。
 
 创建 worktree 后，Coordinator 主动询问是否创建同名 Campaign，等待明确答复。
@@ -99,7 +99,7 @@ Coordinator 根据 templates/worker-prompt.md 输出准确启动目录和一段�
 用户手动启动 Agent 并粘贴提示；Coordinator 不自动启动 Agent。
 启动无需 task.md 或预先创建 Variant/Run；工作树或 Skill 路径不确定时先补齐，不输出占位符。
 Worker 读取已链接 Campaign 的 README 了解大方向，报告就绪后等待用户在该会话中提供具体 prompt。
-收到具体任务后才确认执行分配与权限、记录 task.md 并保存执行证据；共享状态仍由 Coordinator 管理。
+收到具体任务后记录 task.md，在 result.md 维护状态并保存证据；无需等待 Coordinator 分配 Run 或更新索引。
 不依赖空白会话自动发现 Skill，不再默认创建 worker-start 或复制全量协议。
 只请求准备工作区时，返回路径和启动提示，不自动开始执行。
 

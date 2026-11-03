@@ -119,6 +119,18 @@ class LightweightTests(unittest.TestCase):
             text = (ROOT / name).read_text()
             self.assertNotRegex(text, r"(?i)\bround(?:s|_id)?\b")
 
+    def test_worker_execution_does_not_require_run_allocation(self):
+        skill = (ROOT / "SKILL.md").read_text()
+        self.assertIn("按需创建 Variant/Run", skill)
+        self.assertIn("无需逐次分配", skill)
+        self.assertNotIn("需由 Coordinator 分配或明确授权", skill)
+        self.assertNotIn("由 Coordinator 登记 pending", skill)
+        self.assertIn("Run 的执行状态以 result.md 为准", skill)
+        self.assertIn("不修改共享 campaign.json", skill)
+        result = (ROOT / "templates/result.md").read_text()
+        for state in ("pending", "running", "completed", "failed", "cancelled"):
+            self.assertIn(state, result)
+
 
 if __name__ == "__main__":
     unittest.main()
