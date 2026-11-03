@@ -21,7 +21,7 @@ git worktree list --porcelain
    在子模块内时沿 superproject 回到外层 checkout，再按其注册身份判断所属任务工作树。
    子模块中的任务修改仍遵守项目约束，不将子模块自身误认为独立 Worker 工作树。
 4. 匹配 linked worktree 时，无论是 detached HEAD、分支模式、宿主管理路径还是其子目录，
-   自动选择 Worker，并报告识别出的工作树根目录。路径不符合约定则报告布局问题，
+   自动选择 Worker，并报告识别出的工作树根目录。路径按 [Skill](../SKILL.md) 的“项目级布局”核实，
    但仍不转为 Coordinator，也不擅自重建或移动工作树。
 5. 匹配主工作树时，默认 Coordinator。当前目录不是 Git checkout 时，
    使用用户路径或项目容器 AGENTS.md 的明确映射定位目标仓库，再用 Git 清单交叉核实。

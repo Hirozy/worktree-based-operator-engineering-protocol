@@ -56,9 +56,9 @@ Coordinator 同时负责汇总，不为维护文档单独启动 Agent。
 
 1. 检查已有任务说明、Git 状态、工作区占用及用户约定，不重写已有明确计划。
 2. 已有合适的隔离 worktree 就复用；确认属于目标仓库且无其他活跃写入者。
-3. 需要创建时，仅使用能满足下方平级布局的原生能力或已有工具，否则使用 Git。
+3. 需要创建时，按下方项目级布局选择原生能力、已有工具或 Git。
 4. 从明确源码起点创建，不猜测默认分支，不要求主目录名为 `repo`。
-5. 原生工作区由宿主管理；位置不符合平级布局时，沿用已确认且仍适用的例外，否则请求确认，不重复创建。
+5. 原生工作区由宿主管理，不重复创建或移动；路径例外按下方项目级布局处理。
 6. 隔离失败时报告阻塞，不退回多人共享的可写 checkout。
 7. 单 Agent 简单任务不必另起 Coordinator；是否建立 Run 按下方记录范围判断。
 
@@ -81,9 +81,7 @@ Coordinator 同时负责汇总，不为维护文档单独启动 Agent。
 禁止在主仓库内部创建后两者，也禁止将主仓库本身当成 project-container。
 Coordinator 在分配实验产物或创建工作树前执行以下检查：
 
-1. 对已知 checkout 执行 `git worktree list --porcelain`，结合 `git rev-parse --git-common-dir`
-   识别实际主工作树；`git rev-parse --show-toplevel` 只表示当前 checkout，不一定是主仓库。
-   从 linked worktree 启动时仍以主仓库定位父目录，不以当前 cwd 的父目录定位。
+1. 按 [目录识别](references/directory-context.md) 确定实际主工作树，以其父目录定位项目容器，不以当前 linked worktree 或 cwd 定位。
 2. 解析真实路径：`project_container = parent(primary_repository)`；
    `worktrees_root = project_container/worktrees`；
    `artifact_root = project_container/agent-artifacts`。不硬编码主仓库名为 repo。
@@ -95,7 +93,8 @@ Coordinator 在分配实验产物或创建工作树前执行以下检查：
    核实两个根目录存在且与主仓库平级，再报告准备完成。
 
 权限不足、裸仓库、多仓库共用父目录、同名路径冲突或宿主固定位置无法满足布局时，
-报告冲突并取得用户明确布局选择；禁止静默退回主仓库内创建。
+沿用已确认且仍适用的例外，否则报告冲突并取得用户明确布局选择；禁止静默退回主仓库内创建。
+已有 Campaign 时将实际路径与例外记入其 README，后续核实状态，不重复申请；不为记录布局额外创建文件。
 发现旧产物放错位置时不自动移动、删除或重定向链接，先给出迁移方案并确认没有活跃写入者。
 
 ## 创建后确认 Campaign

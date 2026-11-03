@@ -15,20 +15,8 @@
 
 ## 目录
 
-项目级布局必须如下，主仓库保留实际目录名：
-
-```text
-<project-container>/
-├── <primary-repository-name>/
-├── worktrees/
-│   └── <task-worktree>/
-└── agent-artifacts/
-```
-
-`worktrees/` 和 `agent-artifacts/` 与主仓库平级，禁止放在主仓库内部。
-Coordinator 从 Git 元数据识别主仓库，不将当前 linked worktree 或 cwd 当成主仓库。
-准备完成前须创建或复用两个平级目录并报告实际绝对路径。权限、路径冲突或宿主限制需先确认例外，
-不能默默改变布局；旧的错误目录不自动迁移。
+默认将 `worktrees/`、`agent-artifacts/` 与实际主仓库平级放置。
+布局检查、路径例外与本地忽略规则统一见 [SKILL.md](SKILL.md)，这里仅展示产物结构。
 
 产物根目录内部：
 
